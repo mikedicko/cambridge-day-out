@@ -1,5 +1,5 @@
 /* ── Cambridge Day Out ── app logic ──
-   Shared backend: Firestore (photos, tickets, notes, done-state sync live
+   Shared backend: Firestore (photos with notes, tickets, done-state sync live
    between both phones). Offline persistence queues writes until signal returns. */
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -82,11 +82,9 @@
 
   /* ── Shared store (Firestore) ─────────────────────────────────── */
   let db = null, tripRef = null;
-  let allMedia = [];   // [{id, stopId, kind, type, name, data, ts}]
-  let notesMap = {};   // stopId -> text
+  let allMedia = [];   // [{id, stopId, kind, type, name, data, caption, ts}]
   let doneMap = {};    // stopId -> true
   let arrivedMap = {}; // stopId -> true (either phone confirmed arrival)
-  let notesDirty = false; // local note typed but not yet saved
 
   function initFirebase() {
     try {
@@ -107,16 +105,8 @@
         const d = snap.data() || {};
         doneMap = d.done || {};
         arrivedMap = d.arrived || {};
-        // Don't clobber a note that's still being typed / waiting to save
-        const localNote = notesDirty ? notesMap[currentStopId] : undefined;
-        notesMap = d.notes || {};
-        if (notesDirty && localNote !== undefined) notesMap[currentStopId] = localNote;
         renderTimeline();
-        if (!$('sheet').hidden) {
-          updateDoneBtn();
-          const ta = $('notesInput');
-          if (document.activeElement !== ta) ta.value = notesMap[currentStopId] || '';
-        }
+        if (!$('sheet').hidden) updateDoneBtn();
       }, () => {});
     } catch (e) {
       db = null; // itinerary, maps & tips still work without the backend
@@ -162,7 +152,7 @@
 
   async function addMedia(stopId, kind, file) {
     if (!tripRef) { alert('No connection to the shared album yet — try again in a moment.'); return; }
-    let data, type;
+    let data, type, caption = '';
     if (file.type === 'application/pdf') {
       data = await readAsDataURL(file);
       type = 'application/pdf';
@@ -174,8 +164,29 @@
       data = await compressImage(file);
       type = 'image/jpeg';
       if (data.length > 980000) { alert('That photo is too large — try a smaller one.'); return; }
+      if (kind === 'photo') {
+        const c = await promptCaption(data);
+        if (c === null) return; // cancelled
+        caption = c;
+      }
     }
-    await tripRef.collection('media').add({ stopId, kind, type, name: file.name || '', data, ts: Date.now() });
+    await tripRef.collection('media').add({ stopId, kind, type, name: file.name || '', data, caption, ts: Date.now() });
+  }
+
+  /* Photo note modal — resolves with the note text ('' for none) or null on cancel */
+  function promptCaption(dataURL) {
+    return new Promise((resolve) => {
+      $('captionPreview').src = dataURL;
+      $('captionInput').value = '';
+      $('captionModal').hidden = false;
+      const done = (val) => {
+        $('captionModal').hidden = true;
+        $('captionSave').onclick = $('captionCancel').onclick = null;
+        resolve(val);
+      };
+      $('captionSave').onclick = () => done($('captionInput').value.trim());
+      $('captionCancel').onclick = () => done(null);
+    });
   }
   async function deleteMedia(id) {
     if (tripRef) await tripRef.collection('media').doc(id).delete();
@@ -421,7 +432,6 @@
     if (s.website) $('websiteBtn').href = s.website;
 
     $('ticketsSection').hidden = !s.hasTickets;
-    $('notesInput').value = notesMap[stopId] || '';
     updateDoneBtn();
     renderTicketGrid();
     renderPhotoGrid();
@@ -530,6 +540,8 @@
       img.src = m.data;
       body.appendChild(img);
     }
+    $('viewerCaption').textContent = m.caption || '';
+    $('viewerCaption').hidden = !m.caption;
     if (!document.body.classList.contains('locked')) { lockBody(); viewerLocked = true; }
     $('viewer').hidden = false;
   }
@@ -602,16 +614,6 @@
     else doneMap[currentStopId] = true;
     updateDoneBtn();
     saveShared({ done: doneMap });
-  });
-  let notesTimer = null;
-  $('notesInput').addEventListener('input', (e) => {
-    notesMap[currentStopId] = e.target.value;
-    notesDirty = true;
-    clearTimeout(notesTimer);
-    notesTimer = setTimeout(() => {
-      saveShared({ notes: notesMap });
-      notesDirty = false;
-    }, 600);
   });
   $('ticketInput').addEventListener('change', async (e) => {
     for (const f of e.target.files) await addMedia(currentStopId, 'ticket', f);

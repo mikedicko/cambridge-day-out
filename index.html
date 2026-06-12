@@ -135,11 +135,6 @@
         </label>
       </div>
 
-      <div class="sheet-section">
-        <h3>📝 Notes</h3>
-        <textarea class="notes" id="notesInput" rows="3" placeholder="Anything to remember — what you ate, what made you laugh…"></textarea>
-      </div>
-
       <button class="btn btn-done btn-block" id="doneBtn"></button>
       <div class="sheet-bottom-space"></div>
     </div>
@@ -150,16 +145,29 @@
     <button class="viewer-close" id="viewerClose" aria-label="Close">✕</button>
     <button class="viewer-delete" id="viewerDelete">🗑️ Delete</button>
     <div class="viewer-body" id="viewerBody"></div>
+    <div class="viewer-caption" id="viewerCaption" hidden></div>
   </div>
 
-  <!-- Arrival check-in -->
-  <div class="arrive-banner" id="arriveBanner" hidden>
-    <div class="arrive-emoji" id="arriveEmoji">👋</div>
-    <div class="arrive-body">
+  <!-- Arrival check-in (centered modal) -->
+  <div class="modal-backdrop" id="arriveBanner" hidden>
+    <div class="modal arrive-modal">
+      <div class="arrive-emoji" id="arriveEmoji">👋</div>
       <div class="arrive-text" id="arriveText">Have you arrived?</div>
-      <div class="arrive-actions">
-        <button class="btn btn-gold" id="arriveYes">Yes, we’re here! 🎉</button>
+      <div class="modal-actions">
+        <button class="btn btn-gold" id="arriveYes">Yes, we’re here!</button>
         <button class="btn btn-ghost" id="arriveNo">Not yet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Photo note (after picking a photo) -->
+  <div class="modal-backdrop" id="captionModal" hidden>
+    <div class="modal caption-modal">
+      <img id="captionPreview" alt="Photo preview">
+      <input type="text" class="caption-input" id="captionInput" placeholder="Add a note (optional)" maxlength="120" enterkeyhint="done">
+      <div class="modal-actions">
+        <button class="btn btn-gold" id="captionSave">Save photo</button>
+        <button class="btn btn-ghost" id="captionCancel">Cancel</button>
       </div>
     </div>
   </div>
