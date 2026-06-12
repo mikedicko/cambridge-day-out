@@ -1,5 +1,7 @@
 /* Cambridge Day Out — service worker: pre-cache the app shell for offline use. */
-const CACHE = 'cambridge-day-v1';
+const CACHE = 'cambridge-day-v2';
+const STOP_IDS = ['station', 'fitzwilliam', 'fitzbillies', 'bridge-clock', 'kings',
+  'walk-river', 'punting', 'bookshop', 'eagle', 'dishoom', 'gelato'];
 const SHELL = [
   './',
   './index.html',
@@ -10,6 +12,7 @@ const SHELL = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
+  ...STOP_IDS.map((id) => `./images/${id}.jpg`),
 ];
 
 self.addEventListener('install', (e) => {

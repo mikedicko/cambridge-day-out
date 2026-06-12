@@ -8,6 +8,22 @@ const TRIP = {
   title: 'A Day in Cambridge',
 };
 
+// Each stop has a hero photo at images/<id>.jpg (bundled, works offline).
+// Credits for the freely-licensed photos (Wikimedia Commons).
+const IMAGE_CREDITS = {
+  station: 'mattbuck · CC BY-SA 4.0',
+  fitzwilliam: 'Wikimedia Commons · CC BY-SA 2.0',
+  fitzbillies: 'Wikimedia Commons · CC BY-SA 2.0',
+  'bridge-clock': 'TheKaphox · CC0',
+  kings: 'Dmitry Tonkonog · CC BY-SA 3.0',
+  'walk-river': 'M J Richardson · CC BY-SA 2.0',
+  punting: 'Colin Smith · CC BY-SA 2.0',
+  bookshop: 'Jeff Gogarty · CC BY-SA 2.0',
+  eagle: 'Andy Oxford · CC BY-SA 3.0',
+  dishoom: 'Hans Wolff · Public domain',
+  gelato: 'Smb1001 · CC BY-SA 4.0',
+};
+
 const STOPS = [
   {
     id: 'station',

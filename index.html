@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <title>Cambridge Day Out</title>
   <meta name="description" content="Our day out in Cambridge — itinerary, maps, tickets & memories">
-  <meta name="theme-color" content="#1e4d3b">
+  <meta name="theme-color" content="#1e4d3b" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#10231a" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -22,11 +24,11 @@
       <p class="hero-kicker" id="heroKicker">Saturday 13 June</p>
       <h1 class="hero-title">A Day in<br>Cambridge</h1>
       <p class="hero-sub">Museums · Punting · Pints · Gelato</p>
-      <div class="now-card" id="nowCard" hidden>
+      <button class="now-card" id="nowCard" hidden>
         <div class="now-card-label" id="nowLabel">UP NEXT</div>
         <div class="now-card-title" id="nowTitle"></div>
         <div class="now-card-time" id="nowTime"></div>
-      </div>
+      </button>
       <div class="progress-wrap" id="progressWrap">
         <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
         <span class="progress-text" id="progressText"></span>
@@ -75,15 +77,20 @@
   <!-- Stop detail bottom sheet -->
   <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
   <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true">
-    <div class="sheet-handle"></div>
     <div class="sheet-scroll" id="sheetScroll">
+      <div class="sheet-photo" id="sheetPhoto">
+        <img id="sheetPhotoImg" alt="" loading="lazy">
+        <div class="sheet-photo-scrim"></div>
+        <div class="sheet-handle"></div>
+        <button class="sheet-close" id="sheetClose" aria-label="Close">✕</button>
+        <span class="sheet-photo-credit" id="sheetPhotoCredit"></span>
+      </div>
       <div class="sheet-head">
         <div class="sheet-emoji" id="sheetEmoji"></div>
         <div>
           <h2 class="sheet-title" id="sheetTitle"></h2>
           <p class="sheet-time" id="sheetTime"></p>
         </div>
-        <button class="sheet-close" id="sheetClose" aria-label="Close">✕</button>
       </div>
       <div class="sheet-badges" id="sheetBadges"></div>
       <p class="sheet-desc" id="sheetDesc"></p>

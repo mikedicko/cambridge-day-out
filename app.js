@@ -113,10 +113,12 @@
   }
 
   /* ── Hero / now card ── */
+  let heroStopId = null;
   function renderHero(statuses) {
     const nowCard = $('nowCard');
     const nowId = STOPS.find((s) => statuses[s.id] === 'now');
     const nextStop = STOPS.find((s) => statuses[s.id] === 'next');
+    heroStopId = (nowId || nextStop || {}).id || null;
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
@@ -243,11 +245,27 @@
     });
   }
 
+  /* ── Scroll lock (iOS background scroll bleed) ── */
+  let lockScrollY = 0;
+  function lockBody() {
+    lockScrollY = window.scrollY;
+    document.body.style.top = `-${lockScrollY}px`;
+    document.body.classList.add('locked');
+  }
+  function unlockBody() {
+    document.body.classList.remove('locked');
+    document.body.style.top = '';
+    window.scrollTo(0, lockScrollY);
+  }
+
   /* ── Bottom sheet ── */
   let currentStopId = null;
   async function openSheet(stopId) {
     currentStopId = stopId;
     const s = stopById(stopId);
+    $('sheetPhotoImg').src = `images/${s.id}.jpg`;
+    $('sheetPhotoImg').alt = s.name;
+    $('sheetPhotoCredit').textContent = (typeof IMAGE_CREDITS !== 'undefined' && IMAGE_CREDITS[s.id]) ? `📷 ${IMAGE_CREDITS[s.id]}` : '';
     $('sheetEmoji').textContent = s.emoji;
     $('sheetTitle').textContent = s.name;
     $('sheetTime').textContent = fmtRange(s);
@@ -275,6 +293,7 @@
     $('sheetScroll').scrollTop = 0;
     $('sheetBackdrop').hidden = false;
     $('sheet').hidden = false;
+    lockBody();
     requestAnimationFrame(() => {
       $('sheetBackdrop').classList.add('open');
       $('sheet').classList.add('open');
@@ -283,10 +302,41 @@
   function closeSheet() {
     $('sheetBackdrop').classList.remove('open');
     $('sheet').classList.remove('open');
+    $('sheet').style.transform = '';
     $('stopMap').src = 'about:blank';
+    unlockBody();
     setTimeout(() => { $('sheetBackdrop').hidden = true; $('sheet').hidden = true; }, 300);
     refreshAll();
   }
+
+  /* ── Swipe-to-dismiss on the sheet ── */
+  (function sheetSwipe() {
+    const sheet = $('sheet');
+    const scroll = $('sheetScroll');
+    let startY = 0, dy = 0, dragging = false;
+    sheet.addEventListener('touchstart', (e) => {
+      if (scroll.scrollTop > 2) return; // only when scrolled to top
+      startY = e.touches[0].clientY;
+      dy = 0;
+      dragging = true;
+    }, { passive: true });
+    sheet.addEventListener('touchmove', (e) => {
+      if (!dragging) return;
+      dy = e.touches[0].clientY - startY;
+      if (dy > 0 && scroll.scrollTop <= 0) {
+        sheet.classList.add('dragging');
+        sheet.style.transform = `translateY(${dy}px)`;
+      }
+    }, { passive: true });
+    sheet.addEventListener('touchend', () => {
+      if (!dragging) return;
+      dragging = false;
+      sheet.classList.remove('dragging');
+      if (dy > 110) { closeSheet(); }
+      else { sheet.style.transform = ''; }
+      dy = 0;
+    });
+  })();
   function updateDoneBtn() {
     const isDone = !!doneMap[currentStopId];
     const btn = $('doneBtn');
@@ -331,7 +381,7 @@
   }
 
   /* ── Viewer ── */
-  let viewerItem = null;
+  let viewerItem = null, viewerLocked = false;
   function openViewer(m) {
     viewerItem = m;
     const body = $('viewerBody');
@@ -345,9 +395,13 @@
       img.src = mediaURL(m);
       body.appendChild(img);
     }
+    if (!document.body.classList.contains('locked')) { lockBody(); viewerLocked = true; }
     $('viewer').hidden = false;
   }
-  function closeViewer() { $('viewer').hidden = true; $('viewerBody').innerHTML = ''; viewerItem = null; }
+  function closeViewer() {
+    $('viewer').hidden = true; $('viewerBody').innerHTML = ''; viewerItem = null;
+    if (viewerLocked) { unlockBody(); viewerLocked = false; }
+  }
 
   /* ── Confetti ── */
   function confetti() {
@@ -378,6 +432,7 @@
   });
 
   /* ── Events ── */
+  $('nowCard').addEventListener('click', () => { if (heroStopId) openSheet(heroStopId); });
   $('sheetClose').addEventListener('click', closeSheet);
   $('sheetBackdrop').addEventListener('click', closeSheet);
   $('viewerClose').addEventListener('click', closeViewer);
