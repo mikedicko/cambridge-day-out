@@ -85,6 +85,7 @@
   let allMedia = [];   // [{id, stopId, kind, type, name, data, ts}]
   let notesMap = {};   // stopId -> text
   let doneMap = {};    // stopId -> true
+  let arrivedMap = {}; // stopId -> true (either phone confirmed arrival)
   let notesDirty = false; // local note typed but not yet saved
 
   function initFirebase() {
@@ -105,6 +106,7 @@
       tripRef.collection('state').doc('shared').onSnapshot((snap) => {
         const d = snap.data() || {};
         doneMap = d.done || {};
+        arrivedMap = d.arrived || {};
         // Don't clobber a note that's still being typed / waiting to save
         const localNote = notesDirty ? notesMap[currentStopId] : undefined;
         notesMap = d.notes || {};
@@ -192,12 +194,36 @@
     STOPS.forEach((s) => {
       if (doneMap[s.id]) { statuses[s.id] = 'done'; return; }
       if (afterTripDay) { statuses[s.id] = 'done'; return; }
+      // Confirmed arrival pins the stop to 'now' (even if you got there early)
+      if (arrivedMap[s.id] && (!isTripDay || mins < toMins(s.end))) { statuses[s.id] = 'now'; return; }
       if (!isTripDay) { statuses[s.id] = !nextAssigned ? ((nextAssigned = true), 'next') : 'upcoming'; return; }
       if (mins >= toMins(s.end)) statuses[s.id] = 'done';
       else if (mins >= toMins(s.start)) statuses[s.id] = 'now';
       else statuses[s.id] = !nextAssigned ? ((nextAssigned = true), 'next') : 'upcoming';
     });
     return statuses;
+  }
+
+  /* ── Arrival check-in ───────────────────────────────────────────
+     When a stop's start time passes and nobody has confirmed arrival,
+     ask. "Not yet" snoozes the question for 10 minutes (per device). */
+  let arrivalAskId = null;
+  function checkArrival(statuses) {
+    const banner = $('arriveBanner');
+    const candidate = STOPS.find((s) => statuses[s.id] === 'now' && !arrivedMap[s.id]);
+    const snooze = LS.get('arriveSnooze', {});
+    const show = candidate
+      && (!snooze[candidate.id] || Date.now() >= snooze[candidate.id])
+      && $('sheet').hidden; // don't interrupt reading a stop
+    if (show) {
+      arrivalAskId = candidate.id;
+      $('arriveEmoji').textContent = candidate.emoji;
+      $('arriveText').textContent = `Have you arrived at ${candidate.place || candidate.name}?`;
+      banner.hidden = false;
+    } else if (!candidate || (arrivalAskId && (!stopById(arrivalAskId) || arrivedMap[arrivalAskId]))) {
+      banner.hidden = true;
+      arrivalAskId = null;
+    }
   }
 
   /* ── Hero / now card ── */
@@ -257,6 +283,7 @@
   function renderTimeline() {
     const statuses = computeStatus();
     renderHero(statuses);
+    checkArrival(statuses);
     // Walking detection: previous stop finished (by the clock, or either of you
     // marked it done) and the next one hasn't started — you're between stops.
     let walkingToIdx = -1;
@@ -274,7 +301,9 @@
       li.className = `stop ${st}${isWalkingTo ? ' walking' : ''}${isWalkingFrom ? ' trail-active' : ''}`;
       const counts = mediaCountsFor(s.id);
       const pills = [];
-      if (st === 'now') pills.push('<span class="pill pill-now">NOW</span>');
+      if (st === 'now') pills.push(arrivedMap[s.id]
+        ? '<span class="pill pill-now">📍 ARRIVED</span>'
+        : '<span class="pill pill-now">NOW</span>');
       if (s.booked) pills.push(`<span class="pill pill-booked">🎟 ${s.bookedLabel || 'Booked'}</span>`);
       if (st === 'done') pills.push('<span class="pill pill-done">✓ Done</span>');
       if (counts.ticket) pills.push(`<span class="pill pill-media">🎟 ${counts.ticket}</span>`);
@@ -535,6 +564,25 @@
   });
 
   /* ── Events ── */
+  $('arriveYes').addEventListener('click', () => {
+    if (!arrivalAskId) return;
+    arrivedMap[arrivalAskId] = true;
+    // Arriving somewhere means every earlier stop is behind you
+    const idx = STOPS.findIndex((s) => s.id === arrivalAskId);
+    STOPS.slice(0, idx).forEach((s) => { doneMap[s.id] = true; });
+    saveShared({ arrived: arrivedMap, done: doneMap });
+    $('arriveBanner').hidden = true;
+    arrivalAskId = null;
+    renderTimeline();
+  });
+  $('arriveNo').addEventListener('click', () => {
+    if (arrivalAskId) {
+      const snooze = LS.get('arriveSnooze', {});
+      snooze[arrivalAskId] = Date.now() + 10 * 60 * 1000; // ask again in 10 min
+      LS.set('arriveSnooze', snooze);
+    }
+    $('arriveBanner').hidden = true;
+  });
   $('nowCard').addEventListener('click', () => { if (heroStopId) openSheet(heroStopId); });
   $('sheetClose').addEventListener('click', closeSheet);
   $('sheetBackdrop').addEventListener('click', closeSheet);

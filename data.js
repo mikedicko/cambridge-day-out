@@ -36,6 +36,7 @@ const IMAGE_CREDITS = {
 const STOPS = [
   {
     id: 'station',
+    place: 'Cambridge Station',
     emoji: '🚉',
     name: 'Arrive at Cambridge Station',
     start: '11:00', end: '11:25',
@@ -51,6 +52,7 @@ const STOPS = [
   },
   {
     id: 'fitzwilliam',
+    place: 'the Fitzwilliam',
     emoji: '🏛️',
     name: 'The Fitzwilliam Museum',
     start: '11:25', end: '12:30',
@@ -68,6 +70,7 @@ const STOPS = [
   },
   {
     id: 'fitzbillies',
+    place: 'Fitzbillies',
     emoji: '🥐',
     name: 'Lunch at Fitzbillies',
     start: '12:30', end: '13:15',
@@ -84,6 +87,7 @@ const STOPS = [
   },
   {
     id: 'bridge-clock',
+    place: 'the Mathematical Bridge',
     emoji: '🌉',
     name: 'Mathematical Bridge & Corpus Clock',
     start: '13:15', end: '13:50',
@@ -100,6 +104,7 @@ const STOPS = [
   },
   {
     id: 'kings',
+    place: 'King’s College',
     emoji: '⛪',
     name: 'King’s College Chapel',
     start: '14:00', end: '15:15',
@@ -119,6 +124,7 @@ const STOPS = [
   },
   {
     id: 'walk-river',
+    place: 'the punting check-in',
     emoji: '🚶',
     name: 'Walk to the river & check in',
     start: '15:15', end: '15:45',
@@ -135,6 +141,7 @@ const STOPS = [
   },
   {
     id: 'punting',
+    place: 'the riverbank',
     emoji: '🛶',
     name: 'Punting on the Cam',
     start: '15:45', end: '16:45',
@@ -154,6 +161,7 @@ const STOPS = [
   },
   {
     id: 'bookshop',
+    place: 'the Haunted Bookshop',
     emoji: '📚',
     name: 'Haunted Bookshop & Market Square',
     start: '16:45', end: '17:30',
@@ -169,6 +177,7 @@ const STOPS = [
   },
   {
     id: 'eagle',
+    place: 'The Eagle',
     emoji: '🍺',
     name: 'A pint at The Eagle',
     start: '17:30', end: '18:30',
@@ -184,6 +193,7 @@ const STOPS = [
   },
   {
     id: 'dishoom',
+    place: 'Permit Room',
     emoji: '🍛',
     name: 'Dinner at Permit Room (Dishoom)',
     start: '18:30', end: '20:00',
@@ -201,6 +211,7 @@ const STOPS = [
   },
   {
     id: 'gelato',
+    place: 'Jack’s Gelato',
     emoji: '🍨',
     name: 'Jack’s Gelato — grand finale',
     start: '20:00', end: '20:30',
