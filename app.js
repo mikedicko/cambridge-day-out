@@ -1,6 +1,54 @@
-/* ── Cambridge Day Out ── app logic ── */
+/* ── Cambridge Day Out ── app logic ──
+   Shared backend: Firestore (photos, tickets, notes, done-state sync live
+   between both phones). Offline persistence queues writes until signal returns. */
 (() => {
   const $ = (id) => document.getElementById(id);
+
+  /* ── Install gate ─────────────────────────────────────────────── */
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const devBypass = /[?&]dev=1/.test(location.search);
+  if (!isStandalone && !devBypass) {
+    document.addEventListener('DOMContentLoaded', () => {
+      $('gate').hidden = false;
+      $('hero').style.display = 'none';
+      document.querySelector('main').style.display = 'none';
+      $('tabbar').style.display = 'none';
+
+      const ua = navigator.userAgent;
+      const isiOS = /iphone|ipad|ipod/i.test(ua);
+      const isAndroid = /android/i.test(ua);
+      const steps = $('gateSteps');
+      if (isiOS) {
+        steps.innerHTML = `
+          <div class="gate-step"><span class="gate-step-num">1</span> Open this page in <strong>Safari</strong> (if you aren’t already)</div>
+          <div class="gate-step"><span class="gate-step-num">2</span> Tap the <strong>Share</strong> button <span class="gate-glyph">⎋</span> at the bottom</div>
+          <div class="gate-step"><span class="gate-step-num">3</span> Scroll down and tap <strong>Add to Home Screen</strong></div>
+          <div class="gate-step"><span class="gate-step-num">4</span> Open <strong>Cambridge</strong> from your home screen 🎉</div>`;
+      } else if (isAndroid) {
+        steps.innerHTML = `
+          <div class="gate-step"><span class="gate-step-num">1</span> Open this page in <strong>Chrome</strong></div>
+          <div class="gate-step"><span class="gate-step-num">2</span> Tap the <strong>⋮ menu</strong> in the top corner</div>
+          <div class="gate-step"><span class="gate-step-num">3</span> Tap <strong>Add to Home screen</strong> → <strong>Install</strong></div>
+          <div class="gate-step"><span class="gate-step-num">4</span> Open <strong>Cambridge</strong> from your home screen 🎉</div>`;
+        // Chrome may offer the native install prompt — use it if so
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          const btn = $('gateInstallBtn');
+          btn.hidden = false;
+          btn.addEventListener('click', () => e.prompt());
+        });
+      } else {
+        steps.innerHTML = `<div class="gate-step">This app is made for your phone — open it there to install.</div>`;
+        $('gateQr').hidden = false;
+        $('gateQrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=360x360&data=' + encodeURIComponent(location.href);
+      }
+    });
+    // Still register the SW so installs precache while reading instructions
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
+    return; // app itself never boots in browser mode
+  }
 
   /* ── Small helpers ── */
   const toMins = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
@@ -19,12 +67,10 @@
     `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=walking`;
   const mapsFullRoute = () => {
     const pts = STOPS.map((s) => s.mapQuery);
-    const origin = pts[0], destination = pts[pts.length - 1];
     const waypoints = pts.slice(1, -1).join('|');
-    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&waypoints=${encodeURIComponent(waypoints)}&travelmode=walking`;
+    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pts[0])}&destination=${encodeURIComponent(pts[pts.length - 1])}&waypoints=${encodeURIComponent(waypoints)}&travelmode=walking`;
   };
 
-  /* ── Local state (localStorage) ── */
   const LS = {
     get(key, fallback) {
       try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); }
@@ -32,66 +78,108 @@
     },
     set(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} },
   };
-  let doneMap = LS.get('done', {});       // stopId -> true (manual override)
-  let notesMap = LS.get('notes', {});     // stopId -> string
   let confettiFired = LS.get('confettiFired', false);
 
-  /* ── IndexedDB for photos & tickets ──
-     Stored as ArrayBuffer + mime type (more reliable than Blob on older iOS Safari). */
-  const DB_NAME = 'cambridge-day';
-  let dbPromise = null;
-  function openDB() {
-    if (dbPromise) return dbPromise;
-    dbPromise = new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 1);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        const store = db.createObjectStore('media', { keyPath: 'id', autoIncrement: true });
-        store.createIndex('byStop', 'stopId');
-        store.createIndex('byKind', 'kind');
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-    return dbPromise;
+  /* ── Shared store (Firestore) ─────────────────────────────────── */
+  let db = null, tripRef = null;
+  let allMedia = [];   // [{id, stopId, kind, type, name, data, ts}]
+  let notesMap = {};   // stopId -> text
+  let doneMap = {};    // stopId -> true
+  let notesDirty = false; // local note typed but not yet saved
+
+  function initFirebase() {
+    try {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      db = firebase.firestore();
+      db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+      tripRef = db.collection('trips').doc(TRIP.syncId);
+
+      tripRef.collection('media').orderBy('ts').onSnapshot((snap) => {
+        allMedia = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        synced = true;
+        renderTimeline();
+        if (!$('sheet').hidden) { renderTicketGrid(); renderPhotoGrid(); }
+        if (!$('viewMemories').hidden) renderMemories();
+      }, () => {});
+
+      tripRef.collection('state').doc('shared').onSnapshot((snap) => {
+        const d = snap.data() || {};
+        doneMap = d.done || {};
+        // Don't clobber a note that's still being typed / waiting to save
+        const localNote = notesDirty ? notesMap[currentStopId] : undefined;
+        notesMap = d.notes || {};
+        if (notesDirty && localNote !== undefined) notesMap[currentStopId] = localNote;
+        renderTimeline();
+        if (!$('sheet').hidden) {
+          updateDoneBtn();
+          const ta = $('notesInput');
+          if (document.activeElement !== ta) ta.value = notesMap[currentStopId] || '';
+        }
+      }, () => {});
+    } catch (e) {
+      db = null; // itinerary, maps & tips still work without the backend
+    }
   }
+
+  const getMedia = (filter = {}) => allMedia.filter((m) =>
+    (!filter.stopId || m.stopId === filter.stopId) && (!filter.kind || m.kind === filter.kind));
+
+  function saveShared(patch) {
+    if (!tripRef) return;
+    tripRef.collection('state').doc('shared').set(patch, { merge: true }).catch(() => {});
+  }
+
+  /* ── Image compression (keeps docs under Firestore's 1MB cap) ── */
+  function loadImageFile(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => resolve({ img, url });
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
+      img.src = url;
+    });
+  }
+  async function compressImage(file, maxDim = 1280, quality = 0.72) {
+    const { img, url } = await loadImageFile(file);
+    const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    let out = canvas.toDataURL('image/jpeg', quality);
+    if (out.length > 900000) out = canvas.toDataURL('image/jpeg', 0.5);
+    return out;
+  }
+  const readAsDataURL = (file) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+
   async function addMedia(stopId, kind, file) {
-    const buf = await file.arrayBuffer();
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('media', 'readwrite');
-      tx.objectStore('media').add({ stopId, kind, type: file.type, name: file.name, buf, ts: Date.now() });
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-  async function getMedia(filter = {}) {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('media', 'readonly');
-      const req = tx.objectStore('media').getAll();
-      req.onsuccess = () => {
-        let items = req.result;
-        if (filter.stopId) items = items.filter((m) => m.stopId === filter.stopId);
-        if (filter.kind) items = items.filter((m) => m.kind === filter.kind);
-        resolve(items);
-      };
-      req.onerror = () => reject(req.error);
-    });
+    if (!tripRef) { alert('No connection to the shared album yet — try again in a moment.'); return; }
+    let data, type;
+    if (file.type === 'application/pdf') {
+      data = await readAsDataURL(file);
+      type = 'application/pdf';
+      if (data.length > 900000) {
+        alert('That PDF is too big to share — take a screenshot of the ticket and add that instead.');
+        return;
+      }
+    } else {
+      data = await compressImage(file);
+      type = 'image/jpeg';
+      if (data.length > 980000) { alert('That photo is too large — try a smaller one.'); return; }
+    }
+    await tripRef.collection('media').add({ stopId, kind, type, name: file.name || '', data, ts: Date.now() });
   }
   async function deleteMedia(id) {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('media', 'readwrite');
-      tx.objectStore('media').delete(id);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
+    if (tripRef) await tripRef.collection('media').doc(id).delete();
   }
-  const mediaURL = (m) => URL.createObjectURL(new Blob([m.buf], { type: m.type }));
 
   /* ── Status engine ── */
-  // 'done' | 'now' | 'next' | 'upcoming'
   function computeStatus() {
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -158,14 +246,10 @@
   }
 
   /* ── Timeline ── */
-  let mediaCounts = {}; // stopId -> {photos, tickets}
-  async function refreshMediaCounts() {
-    const all = await getMedia();
-    mediaCounts = {};
-    all.forEach((m) => {
-      mediaCounts[m.stopId] = mediaCounts[m.stopId] || { photo: 0, ticket: 0 };
-      mediaCounts[m.stopId][m.kind]++;
-    });
+  function mediaCountsFor(stopId) {
+    const counts = { photo: 0, ticket: 0 };
+    allMedia.forEach((m) => { if (m.stopId === stopId) counts[m.kind] = (counts[m.kind] || 0) + 1; });
+    return counts;
   }
 
   function renderTimeline() {
@@ -177,7 +261,7 @@
       const li = document.createElement('li');
       const st = statuses[s.id];
       li.className = `stop ${st}`;
-      const counts = mediaCounts[s.id] || { photo: 0, ticket: 0 };
+      const counts = mediaCountsFor(s.id);
       const pills = [];
       if (st === 'now') pills.push('<span class="pill pill-now">NOW</span>');
       if (s.booked) pills.push(`<span class="pill pill-booked">🎟 ${s.bookedLabel || 'Booked'}</span>`);
@@ -217,8 +301,8 @@
   }
 
   /* ── Memories ── */
-  async function renderMemories() {
-    const photos = await getMedia({ kind: 'photo' });
+  function renderMemories() {
+    const photos = getMedia({ kind: 'photo' });
     const grid = $('memoriesGrid');
     grid.innerHTML = '';
     $('memoriesEmpty').hidden = photos.length > 0;
@@ -235,7 +319,7 @@
         const b = document.createElement('button');
         b.className = 'mem-thumb';
         const img = document.createElement('img');
-        img.src = mediaURL(m);
+        img.src = m.data;
         img.alt = s.name;
         b.appendChild(img);
         b.addEventListener('click', () => openViewer(m));
@@ -260,7 +344,7 @@
 
   /* ── Bottom sheet ── */
   let currentStopId = null;
-  async function openSheet(stopId) {
+  function openSheet(stopId) {
     currentStopId = stopId;
     const s = stopById(stopId);
     $('sheetPhotoImg').src = `images/${s.id}.jpg`;
@@ -288,7 +372,8 @@
     $('ticketsSection').hidden = !s.hasTickets;
     $('notesInput').value = notesMap[stopId] || '';
     updateDoneBtn();
-    await Promise.all([renderTicketGrid(), renderPhotoGrid()]);
+    renderTicketGrid();
+    renderPhotoGrid();
 
     $('sheetScroll').scrollTop = 0;
     $('sheetBackdrop').hidden = false;
@@ -306,7 +391,7 @@
     $('stopMap').src = 'about:blank';
     unlockBody();
     setTimeout(() => { $('sheetBackdrop').hidden = true; $('sheet').hidden = true; }, 300);
-    refreshAll();
+    renderTimeline();
   }
 
   /* ── Swipe-to-dismiss on the sheet ── */
@@ -315,7 +400,7 @@
     const scroll = $('sheetScroll');
     let startY = 0, dy = 0, dragging = false;
     sheet.addEventListener('touchstart', (e) => {
-      if (scroll.scrollTop > 2) return; // only when scrolled to top
+      if (scroll.scrollTop > 2) return;
       startY = e.touches[0].clientY;
       dy = 0;
       dragging = true;
@@ -337,6 +422,7 @@
       dy = 0;
     });
   })();
+
   function updateDoneBtn() {
     const isDone = !!doneMap[currentStopId];
     const btn = $('doneBtn');
@@ -344,18 +430,17 @@
     btn.classList.toggle('undone', isDone);
   }
 
-  async function renderTicketGrid() {
+  function renderTicketGrid() {
     const s = stopById(currentStopId);
     const grid = $('ticketGrid');
     grid.innerHTML = '';
-    if (!s.hasTickets) return;
-    const tickets = await getMedia({ stopId: currentStopId, kind: 'ticket' });
-    tickets.forEach((m) => {
+    if (!s || !s.hasTickets) return;
+    getMedia({ stopId: currentStopId, kind: 'ticket' }).forEach((m) => {
       const b = document.createElement('button');
       if (m.type.startsWith('image/')) {
         b.className = 'ticket-thumb img-ticket';
         const img = document.createElement('img');
-        img.src = mediaURL(m); img.alt = 'Ticket';
+        img.src = m.data; img.alt = 'Ticket';
         b.appendChild(img);
       } else {
         b.className = 'ticket-thumb';
@@ -365,15 +450,14 @@
       grid.appendChild(b);
     });
   }
-  async function renderPhotoGrid() {
+  function renderPhotoGrid() {
     const grid = $('photoGrid');
     grid.innerHTML = '';
-    const photos = await getMedia({ stopId: currentStopId, kind: 'photo' });
-    photos.forEach((m) => {
+    getMedia({ stopId: currentStopId, kind: 'photo' }).forEach((m) => {
       const b = document.createElement('button');
       b.className = 'photo-thumb';
       const img = document.createElement('img');
-      img.src = mediaURL(m); img.alt = 'Photo';
+      img.src = m.data; img.alt = 'Photo';
       b.appendChild(img);
       b.addEventListener('click', () => openViewer(m));
       grid.appendChild(b);
@@ -388,11 +472,11 @@
     body.innerHTML = '';
     if (m.type === 'application/pdf') {
       const frame = document.createElement('iframe');
-      frame.src = mediaURL(m);
+      frame.src = m.data;
       body.appendChild(frame);
     } else {
       const img = document.createElement('img');
-      img.src = mediaURL(m);
+      img.src = m.data;
       body.appendChild(img);
     }
     if (!document.body.classList.contains('locked')) { lockBody(); viewerLocked = true; }
@@ -405,6 +489,7 @@
 
   /* ── Confetti ── */
   function confetti() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const layer = $('confettiLayer');
     const colors = ['#c9a227', '#1e4d3b', '#c4663d', '#e8d49a', '#7fb069'];
     for (let i = 0; i < 90; i++) {
@@ -438,47 +523,36 @@
   $('viewerClose').addEventListener('click', closeViewer);
   $('viewerDelete').addEventListener('click', async () => {
     if (!viewerItem) return;
-    if (!confirm('Delete this?')) return;
+    if (!confirm('Delete this for both of you?')) return;
     await deleteMedia(viewerItem.id);
     closeViewer();
-    await refreshMediaCounts();
-    if (!$('sheet').hidden) { renderTicketGrid(); renderPhotoGrid(); }
-    if (!$('viewMemories').hidden) renderMemories();
   });
   $('doneBtn').addEventListener('click', () => {
     if (doneMap[currentStopId]) delete doneMap[currentStopId];
     else doneMap[currentStopId] = true;
-    LS.set('done', doneMap);
     updateDoneBtn();
+    saveShared({ done: doneMap });
   });
+  let notesTimer = null;
   $('notesInput').addEventListener('input', (e) => {
     notesMap[currentStopId] = e.target.value;
-    LS.set('notes', notesMap);
+    notesDirty = true;
+    clearTimeout(notesTimer);
+    notesTimer = setTimeout(() => {
+      saveShared({ notes: notesMap });
+      notesDirty = false;
+    }, 600);
   });
   $('ticketInput').addEventListener('change', async (e) => {
     for (const f of e.target.files) await addMedia(currentStopId, 'ticket', f);
     e.target.value = '';
-    await refreshMediaCounts();
     renderTicketGrid();
   });
   $('photoInput').addEventListener('change', async (e) => {
     for (const f of e.target.files) await addMedia(currentStopId, 'photo', f);
     e.target.value = '';
-    await refreshMediaCounts();
     renderPhotoGrid();
   });
-
-  /* ── Install hint (iOS Safari, not yet installed) ── */
-  (function installHint() {
-    const dismissed = LS.get('installHintDismissed', false);
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-    const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    if (isiOS && !isStandalone && !dismissed) $('installHint').hidden = false;
-    $('installHintClose').addEventListener('click', () => {
-      $('installHint').hidden = true;
-      LS.set('installHintDismissed', true);
-    });
-  })();
 
   /* ── Hero date ── */
   (function heroDate() {
@@ -487,13 +561,10 @@
   })();
 
   /* ── Boot ── */
-  async function refreshAll() {
-    await refreshMediaCounts();
-    renderTimeline();
-  }
+  initFirebase();
   renderRoute();
-  refreshAll();
-  setInterval(() => renderTimeline(), 60 * 1000); // live status updates
+  renderTimeline();
+  setInterval(() => renderTimeline(), 60 * 1000);
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

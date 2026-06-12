@@ -153,7 +153,52 @@ main { max-width: 560px; margin: 0 auto; padding: 18px 16px calc(96px + var(--sa
 .pill-media { background: var(--cream-2); color: var(--ink-soft); font-weight: 600; }
 .stop-chevron { color: #c9c2b2; font-size: 18px; }
 
-.end-note { text-align: center; font-size: 12.5px; color: var(--ink-soft); padding: 18px 0 6px; }
+.end-note {
+  text-align: center; font-family: var(--serif); font-style: italic;
+  font-size: 14.5px; color: var(--ink-soft); padding: 22px 24px 8px; line-height: 1.6;
+}
+.end-note-attr { font-size: 12px; font-style: normal; letter-spacing: .08em; }
+
+/* ── Install gate ── */
+.gate {
+  min-height: 100vh; min-height: 100dvh;
+  background:
+    radial-gradient(120% 90% at 80% -10%, rgba(201,162,39,.35), transparent 55%),
+    linear-gradient(160deg, var(--green) 0%, var(--green-deep) 100%);
+  color: #ece7da;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 32px) 28px calc(env(safe-area-inset-bottom, 0px) + 32px);
+}
+.gate-inner { max-width: 420px; width: 100%; }
+.gate-kicker {
+  font-size: 13px; letter-spacing: .18em; text-transform: uppercase;
+  color: #e8d49a; font-weight: 600; margin-bottom: 8px;
+}
+.gate-title { font-family: var(--serif); font-size: 44px; line-height: 1.05; font-weight: 600; }
+.gate-sub { margin: 14px 0 22px; font-size: 15px; line-height: 1.5; color: rgba(236,231,218,.85); }
+.gate-step {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 14px; padding: 13px 15px;
+  font-size: 14.5px; line-height: 1.4; margin-bottom: 9px;
+}
+.gate-step-num {
+  width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%;
+  background: var(--gold); color: #fff;
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.gate-glyph { font-size: 17px; }
+.gate .btn { margin-top: 8px; }
+.gate-qr { text-align: center; margin-top: 22px; }
+.gate-qr img { border-radius: 14px; background: #fff; padding: 8px; }
+.gate-qr p { font-size: 13px; margin-top: 10px; color: rgba(236,231,218,.8); }
+.gate-quote {
+  margin-top: 28px; font-family: var(--serif); font-style: italic;
+  font-size: 14.5px; color: rgba(236,231,218,.65); line-height: 1.6;
+}
+.gate-quote span { display: block; font-size: 12px; font-style: normal; letter-spacing: .08em; margin-top: 2px; }
 
 /* ── Route view ── */
 .map-frame-wrap {

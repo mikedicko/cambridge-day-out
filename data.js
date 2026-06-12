@@ -6,6 +6,15 @@
 const TRIP = {
   date: '2026-06-13', // tomorrow
   title: 'A Day in Cambridge',
+  syncId: 'cam-0d80f8ea2cd8', // shared Firestore path — both phones see the same photos/notes
+};
+
+// Shared backend (Firestore free tier; rules only open the trip path above)
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyCGyP10WWpGVQCCiH8_Tlmn2IgXpyMDuEg',
+  authDomain: 'cambridge-day-2026.firebaseapp.com',
+  projectId: 'cambridge-day-2026',
+  appId: '1:925410625884:web:e983e8e09ec46c32a3d999',
 };
 
 // Each stop has a hero photo at images/<id>.jpg (bundled, works offline).

@@ -36,15 +36,26 @@
     </div>
   </header>
 
-  <div class="install-hint" id="installHint" hidden>
-    <span>Tip: tap <strong>Share</strong> → <strong>Add to Home Screen</strong> to install this app 📲</span>
-    <button class="install-hint-close" id="installHintClose" aria-label="Dismiss">✕</button>
-  </div>
+  <!-- Install gate: shown instead of the app when not running as an installed PWA -->
+  <section class="gate" id="gate" hidden>
+    <div class="gate-inner">
+      <p class="gate-kicker">Saturday 13 June</p>
+      <h1 class="gate-title">A Day in<br>Cambridge</h1>
+      <p class="gate-sub">This is an app, not a website — add it to your home screen to begin.</p>
+      <div class="gate-steps" id="gateSteps"></div>
+      <button class="btn btn-gold btn-block" id="gateInstallBtn" hidden>⤓ Install app</button>
+      <div class="gate-qr" id="gateQr" hidden>
+        <img id="gateQrImg" alt="QR code to open on your phone" width="180" height="180">
+        <p>Scan with your phone</p>
+      </div>
+      <p class="gate-quote">“Not all those who wander are lost.”<span>— J.R.R. Tolkien</span></p>
+    </div>
+  </section>
 
   <main>
     <section class="view view-today" id="viewToday">
       <ol class="timeline" id="timeline"></ol>
-      <div class="end-note">Made with ❤️ for one perfect day</div>
+      <div class="end-note">“Not all those who wander are lost.”<br><span class="end-note-attr">— J.R.R. Tolkien</span></div>
     </section>
 
     <section class="view view-map" id="viewMap" hidden>
@@ -59,7 +70,7 @@
 
     <section class="view view-memories" id="viewMemories" hidden>
       <h2 class="view-heading">Memories</h2>
-      <p class="view-sub">Photos from the day, stop by stop. Add them from each activity.</p>
+      <p class="view-sub">Photos from the day, stop by stop — shared live between both your phones.</p>
       <div id="memoriesGrid" class="memories-grid"></div>
       <div class="memories-empty" id="memoriesEmpty">
         <div class="memories-empty-icon">📷</div>
@@ -145,6 +156,8 @@
 
   <div class="confetti-layer" id="confettiLayer"></div>
 
+  <script src="vendor/firebase-app-compat.js"></script>
+  <script src="vendor/firebase-firestore-compat.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>

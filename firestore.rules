@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only the one (unguessable) trip path is accessible; everything else
+    // stays closed. Firestore itself enforces the 1MB document cap.
+    match /trips/cam-0d80f8ea2cd8/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
