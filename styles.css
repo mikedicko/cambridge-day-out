@@ -101,7 +101,7 @@ main { max-width: 560px; margin: 0 auto; padding: 18px 16px calc(96px + var(--sa
 
 /* Footstep trail from this stop's dot down to the next stop */
 .steps-trail {
-  position: absolute; left: 9px; top: 44px; bottom: -4px; width: 26px;
+  position: absolute; left: 9px; top: 53px; bottom: -4px; width: 26px;
   display: flex; flex-direction: column; justify-content: space-evenly; align-items: center;
   pointer-events: none;
 }
@@ -135,12 +135,13 @@ main { max-width: 560px; margin: 0 auto; padding: 18px 16px calc(96px + var(--sa
   0%, 100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, .35); }
   50% { box-shadow: 0 0 0 6px rgba(201, 162, 39, 0); }
 }
-/* Stops without a walk-chip row (first stop, punting) — pull the dot up so it
-   sits level with its card like the others, and give the trail full height */
-.stop.no-chip .stop-dot { top: -8px; }
-.stop.no-chip .steps-trail { top: 20px; }
+/* Number dots align with the TOP of their card; stops without a walk-chip
+   row (first stop, punting) need a smaller offset since the card starts at
+   the top of the row */
+.stop.no-chip .stop-dot { top: 0; }
+.stop.no-chip .steps-trail { top: 26px; }
 .stop-dot {
-  position: absolute; left: 12px; top: 18px;
+  position: absolute; left: 12px; top: 27px;
   width: 20px; height: 20px; border-radius: 50%;
   background: var(--cream); border: 2px solid var(--green);
   display: flex; align-items: center; justify-content: center;
