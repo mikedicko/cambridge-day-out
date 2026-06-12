@@ -391,6 +391,7 @@
       const chip = isWalkingTo
         ? `<div class="walk-chip walking">🚶 On the way${s.walk ? ` — ${s.walk}` : '…'}</div>`
         : (s.walk ? `<div class="walk-chip">🚶 ${s.walk}</div>` : '');
+      if (!chip) li.classList.add('no-chip'); // dot aligns to the card, not a chip row
       const trail = i < actives.length - 1
         ? `<div class="steps-trail" aria-hidden="true">${'<span>👣</span>'.repeat(5)}</div>`
         : '';
@@ -738,8 +739,11 @@
 
   /* ── Skip / reactivate ── */
   $('skipBtn').addEventListener('click', () => {
-    if (skippedMap[currentStopId]) delete skippedMap[currentStopId];
-    else {
+    const s = stopById(currentStopId);
+    if (skippedMap[currentStopId]) {
+      delete skippedMap[currentStopId];
+    } else {
+      if (!confirm(`Skip ${s ? s.name : 'this activity'}? It moves to the bottom of Today — you can bring it back anytime.`)) return;
       skippedMap[currentStopId] = true;
       delete arrivedMap[currentStopId];
     }
