@@ -36,6 +36,9 @@ const IMAGE_CREDITS = {
 const STOPS = [
   {
     id: 'station',
+    tease: 'bring comfy shoes',
+    walkLine: '',
+    nowLine: 'and so it begins',
     place: 'Cambridge Station',
     emoji: '🚉',
     name: 'Arrive at Cambridge Station',
@@ -52,6 +55,9 @@ const STOPS = [
   },
   {
     id: 'fitzwilliam',
+    tease: 'five centuries of treasure, free entry',
+    walkLine: 'a straight stroll up Trumpington Street',
+    nowLine: 'eyes up in the entrance hall',
     place: 'the Fitzwilliam',
     emoji: '🏛️',
     name: 'The Fitzwilliam Museum',
@@ -70,6 +76,9 @@ const STOPS = [
   },
   {
     id: 'fitzbillies',
+    tease: 'the Chelsea buns are calling',
+    walkLine: 'follow the smell of cinnamon',
+    nowLine: 'one bun now, one boxed for later',
     place: 'Fitzbillies',
     emoji: '🥐',
     name: 'Lunch at Fitzbillies',
@@ -87,6 +96,9 @@ const STOPS = [
   },
   {
     id: 'bridge-clock',
+    tease: 'a wooden bridge and a time-eating monster',
+    walkLine: 'two photo stops on the way to King’s',
+    nowLine: 'find the grasshopper eating time',
     place: 'the Mathematical Bridge',
     emoji: '🌉',
     name: 'Mathematical Bridge & Corpus Clock',
@@ -104,6 +116,9 @@ const STOPS = [
   },
   {
     id: 'kings',
+    tease: 'the big one — tour at 2pm sharp',
+    walkLine: 'tickets ready — entrance on King’s Parade',
+    nowLine: 'the ceiling is the masterpiece',
     place: 'King’s College',
     emoji: '⛪',
     name: 'King’s College Chapel',
@@ -124,6 +139,9 @@ const STOPS = [
   },
   {
     id: 'walk-river',
+    tease: 'check in by 3:30 — look for the orange umbrella',
+    walkLine: 'head for Jesus Green and the orange umbrella',
+    nowLine: 'checked in? loos are on the green',
     place: 'the punting check-in',
     emoji: '🚶',
     name: 'Walk to the river & check in',
@@ -141,6 +159,9 @@ const STOPS = [
   },
   {
     id: 'punting',
+    tease: 'the most romantic hour of the day',
+    walkLine: 'the river is waiting',
+    nowLine: 'phones out for the Bridge of Sighs',
     place: 'the riverbank',
     emoji: '🛶',
     name: 'Punting on the Cam',
@@ -161,6 +182,9 @@ const STOPS = [
   },
   {
     id: 'bookshop',
+    tease: 'ghosts, old books and market stalls',
+    walkLine: 'bookshop first — it closes early',
+    nowLine: 'buy each other a secret book',
     place: 'the Haunted Bookshop',
     emoji: '📚',
     name: 'Haunted Bookshop & Market Square',
@@ -177,6 +201,9 @@ const STOPS = [
   },
   {
     id: 'eagle',
+    tease: 'a pint where DNA was announced',
+    walkLine: 'two minutes to a historic pint',
+    nowLine: 'look up in the RAF bar',
     place: 'The Eagle',
     emoji: '🍺',
     name: 'A pint at The Eagle',
@@ -193,6 +220,9 @@ const STOPS = [
   },
   {
     id: 'dishoom',
+    tease: 'black daal and Bombay comfort',
+    walkLine: 'name on the list, then drinks at the bar',
+    nowLine: 'order the black daal — trust us',
     place: 'Permit Room',
     emoji: '🍛',
     name: 'Dinner at Permit Room (Dishoom)',
@@ -211,6 +241,9 @@ const STOPS = [
   },
   {
     id: 'gelato',
+    tease: 'the grand finale',
+    walkLine: 'one last stroll — dessert is earned',
+    nowLine: 'one classic flavour, one weird one',
     place: 'Jack’s Gelato',
     emoji: '🍨',
     name: 'Jack’s Gelato — grand finale',

@@ -20,16 +20,16 @@
       const steps = $('gateSteps');
       if (isiOS) {
         steps.innerHTML = `
-          <div class="gate-step"><span class="gate-step-num">1</span> Open this page in <strong>Safari</strong> (if you aren’t already)</div>
-          <div class="gate-step"><span class="gate-step-num">2</span> Tap the <strong>Share</strong> button <span class="gate-glyph">⎋</span> at the bottom</div>
-          <div class="gate-step"><span class="gate-step-num">3</span> Scroll down and tap <strong>Add to Home Screen</strong></div>
-          <div class="gate-step"><span class="gate-step-num">4</span> Open <strong>Cambridge</strong> from your home screen 🎉</div>`;
+          <div class="gate-step"><span class="gate-step-num">1</span> Open this page in Safari</div>
+          <div class="gate-step"><span class="gate-step-num">2</span> Tap the Share button</div>
+          <div class="gate-step"><span class="gate-step-num">3</span> Tap “Add to Home Screen”</div>
+          <div class="gate-step"><span class="gate-step-num">4</span> Open Cambridge from your home screen</div>`;
       } else if (isAndroid) {
         steps.innerHTML = `
-          <div class="gate-step"><span class="gate-step-num">1</span> Open this page in <strong>Chrome</strong></div>
-          <div class="gate-step"><span class="gate-step-num">2</span> Tap the <strong>⋮ menu</strong> in the top corner</div>
-          <div class="gate-step"><span class="gate-step-num">3</span> Tap <strong>Add to Home screen</strong> → <strong>Install</strong></div>
-          <div class="gate-step"><span class="gate-step-num">4</span> Open <strong>Cambridge</strong> from your home screen 🎉</div>`;
+          <div class="gate-step"><span class="gate-step-num">1</span> Open this page in Chrome</div>
+          <div class="gate-step"><span class="gate-step-num">2</span> Open the browser menu</div>
+          <div class="gate-step"><span class="gate-step-num">3</span> Tap “Add to Home screen”</div>
+          <div class="gate-step"><span class="gate-step-num">4</span> Open Cambridge from your home screen</div>`;
         // Chrome may offer the native install prompt — use it if so
         window.addEventListener('beforeinstallprompt', (e) => {
           e.preventDefault();
@@ -240,21 +240,25 @@
       nowCard.hidden = false;
       $('nowLabel').textContent = '● HAPPENING NOW';
       $('nowTitle').textContent = `${nowId.emoji} ${nowId.name}`;
-      $('nowTime').textContent = `until ${nowId.end}`;
+      $('nowTime').textContent = nowId.nowLine ? `${nowId.nowLine} · until ${nowId.end}` : `until ${nowId.end}`;
     } else if (nextStop) {
       nowCard.hidden = false;
       const idx = STOPS.indexOf(nextStop);
       const walking = idx > 0 && statuses[STOPS[idx - 1].id] === 'done';
       $('nowLabel').textContent = walking ? '🚶 ON THE WAY TO' : 'UP NEXT';
       $('nowTitle').textContent = `${nextStop.emoji} ${nextStop.name}`;
-      if (todayStr === TRIP.date) {
+      if (walking) {
+        $('nowTime').textContent = nextStop.walkLine || `at ${nextStop.start}`;
+      } else if (todayStr === TRIP.date) {
         const diff = toMins(nextStop.start) - (now.getHours() * 60 + now.getMinutes());
         const h = Math.floor(diff / 60), m = diff % 60;
-        $('nowTime').textContent = diff > 0 ? `in ${h ? h + 'h ' : ''}${m}m · at ${nextStop.start}` : `at ${nextStop.start}`;
+        const when = diff > 0 ? `in ${h ? h + 'h ' : ''}${m}m` : `at ${nextStop.start}`;
+        $('nowTime').textContent = nextStop.tease ? `${when} — ${nextStop.tease}` : when;
       } else {
         const tripDate = new Date(TRIP.date + 'T00:00:00');
         const days = Math.ceil((tripDate - now) / 86400000);
-        $('nowTime').textContent = days === 1 ? `tomorrow at ${nextStop.start} — get excited!` : `at ${nextStop.start}`;
+        const when = days === 1 ? `tomorrow at ${nextStop.start}` : `at ${nextStop.start}`;
+        $('nowTime').textContent = nextStop.tease ? `${when} — ${nextStop.tease}` : when;
       }
     } else {
       nowCard.hidden = false;
