@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <title>Cambridge Day Out</title>
+  <meta name="description" content="Our day out in Cambridge — itinerary, maps, tickets & memories">
+  <meta name="theme-color" content="#1e4d3b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cambridge">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header class="hero" id="hero">
+    <div class="hero-inner">
+      <p class="hero-kicker" id="heroKicker">Saturday 13 June</p>
+      <h1 class="hero-title">A Day in<br>Cambridge</h1>
+      <p class="hero-sub">Museums · Punting · Pints · Gelato</p>
+      <div class="now-card" id="nowCard" hidden>
+        <div class="now-card-label" id="nowLabel">UP NEXT</div>
+        <div class="now-card-title" id="nowTitle"></div>
+        <div class="now-card-time" id="nowTime"></div>
+      </div>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <span class="progress-text" id="progressText"></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="install-hint" id="installHint" hidden>
+    <span>Tip: tap <strong>Share</strong> → <strong>Add to Home Screen</strong> to install this app 📲</span>
+    <button class="install-hint-close" id="installHintClose" aria-label="Dismiss">✕</button>
+  </div>
+
+  <main>
+    <section class="view view-today" id="viewToday">
+      <ol class="timeline" id="timeline"></ol>
+      <div class="end-note">Made with ❤️ for one perfect day</div>
+    </section>
+
+    <section class="view view-map" id="viewMap" hidden>
+      <h2 class="view-heading">The Route</h2>
+      <p class="view-sub">Every stop of the day, in order. Open in Google Maps for live walking directions.</p>
+      <div class="map-frame-wrap">
+        <iframe id="routeMap" title="Day route map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+      </div>
+      <a class="btn btn-primary btn-block" id="openRouteBtn" target="_blank" rel="noopener">🗺️ Open full route in Google Maps</a>
+      <ol class="route-list" id="routeList"></ol>
+    </section>
+
+    <section class="view view-memories" id="viewMemories" hidden>
+      <h2 class="view-heading">Memories</h2>
+      <p class="view-sub">Photos from the day, stop by stop. Add them from each activity.</p>
+      <div id="memoriesGrid" class="memories-grid"></div>
+      <div class="memories-empty" id="memoriesEmpty">
+        <div class="memories-empty-icon">📷</div>
+        <p>No photos yet — open any stop and tap <strong>Add photo</strong> as you go. By gelato o'clock this page will be a scrapbook.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" id="tabbar">
+    <button class="tab active" data-view="viewToday"><span class="tab-icon">🗓️</span><span>Today</span></button>
+    <button class="tab" data-view="viewMap"><span class="tab-icon">🗺️</span><span>Route</span></button>
+    <button class="tab" data-view="viewMemories"><span class="tab-icon">📸</span><span>Memories</span></button>
+  </nav>
+
+  <!-- Stop detail bottom sheet -->
+  <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+  <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-scroll" id="sheetScroll">
+      <div class="sheet-head">
+        <div class="sheet-emoji" id="sheetEmoji"></div>
+        <div>
+          <h2 class="sheet-title" id="sheetTitle"></h2>
+          <p class="sheet-time" id="sheetTime"></p>
+        </div>
+        <button class="sheet-close" id="sheetClose" aria-label="Close">✕</button>
+      </div>
+      <div class="sheet-badges" id="sheetBadges"></div>
+      <p class="sheet-desc" id="sheetDesc"></p>
+
+      <div class="sheet-section" id="tipsSection">
+        <h3>💡 Tips</h3>
+        <ul class="tips-list" id="tipsList"></ul>
+      </div>
+
+      <div class="sheet-section">
+        <h3>📍 Getting there</h3>
+        <div class="map-frame-wrap small"><iframe id="stopMap" title="Stop map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe></div>
+        <div class="btn-row">
+          <a class="btn btn-primary" id="directionsBtn" target="_blank" rel="noopener">🚶 Directions</a>
+          <a class="btn btn-ghost" id="websiteBtn" target="_blank" rel="noopener" hidden>🔗 Website</a>
+        </div>
+      </div>
+
+      <div class="sheet-section" id="ticketsSection" hidden>
+        <h3>🎟️ Tickets</h3>
+        <p class="section-hint">Add a screenshot or PDF of your booking so it's one tap away (works offline).</p>
+        <div class="ticket-grid" id="ticketGrid"></div>
+        <label class="btn btn-gold btn-block file-btn">＋ Add ticket
+          <input type="file" id="ticketInput" accept="image/*,application/pdf" multiple hidden>
+        </label>
+      </div>
+
+      <div class="sheet-section">
+        <h3>📸 Photos</h3>
+        <div class="photo-grid" id="photoGrid"></div>
+        <label class="btn btn-ghost btn-block file-btn">＋ Add photo
+          <input type="file" id="photoInput" accept="image/*" multiple hidden>
+        </label>
+      </div>
+
+      <div class="sheet-section">
+        <h3>📝 Notes</h3>
+        <textarea class="notes" id="notesInput" rows="3" placeholder="Anything to remember — what you ate, what made you laugh…"></textarea>
+      </div>
+
+      <button class="btn btn-done btn-block" id="doneBtn"></button>
+      <div class="sheet-bottom-space"></div>
+    </div>
+  </div>
+
+  <!-- Full-screen media viewer -->
+  <div class="viewer" id="viewer" hidden>
+    <button class="viewer-close" id="viewerClose" aria-label="Close">✕</button>
+    <button class="viewer-delete" id="viewerDelete">🗑️ Delete</button>
+    <div class="viewer-body" id="viewerBody"></div>
+  </div>
+
+  <div class="confetti-layer" id="confettiLayer"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
