@@ -94,12 +94,47 @@ main { max-width: 560px; margin: 0 auto; padding: 18px 16px calc(96px + var(--sa
 
 /* ── Timeline ── */
 .timeline { list-style: none; position: relative; }
-.timeline::before {
-  content: ""; position: absolute; left: 21px; top: 14px; bottom: 14px;
-  width: 2px; background: linear-gradient(var(--gold-soft), var(--green) 80%);
-  opacity: .5;
-}
 .stop { position: relative; padding: 0 0 14px 52px; }
+
+/* Footstep trail from this stop's dot down to the next stop */
+.steps-trail {
+  position: absolute; left: 9px; top: 44px; bottom: -4px; width: 26px;
+  display: flex; flex-direction: column; justify-content: space-evenly; align-items: center;
+  pointer-events: none;
+}
+.steps-trail span {
+  font-size: 11px; line-height: 1; opacity: .28;
+  transform: rotate(180deg) translateX(3px); /* toes pointing down the path */
+}
+.steps-trail span:nth-child(even) { transform: rotate(180deg) translateX(-3px); }
+
+/* Walking! — footsteps light up one after another */
+.stop.trail-active .steps-trail span {
+  animation: stepPulse 2.5s infinite;
+  filter: drop-shadow(0 0 4px rgba(201, 162, 39, .9));
+}
+.stop.trail-active .steps-trail span:nth-child(1) { animation-delay: 0s; }
+.stop.trail-active .steps-trail span:nth-child(2) { animation-delay: .45s; }
+.stop.trail-active .steps-trail span:nth-child(3) { animation-delay: .9s; }
+.stop.trail-active .steps-trail span:nth-child(4) { animation-delay: 1.35s; }
+.stop.trail-active .steps-trail span:nth-child(5) { animation-delay: 1.8s; }
+@keyframes stepPulse {
+  0%, 55%, 100% { opacity: .22; }
+  12%, 32% { opacity: 1; }
+}
+
+/* Destination stop while walking to it */
+.stop.walking .stop-card { border-color: rgba(201, 162, 39, .55); border-style: dashed; }
+.walk-chip.walking {
+  background: var(--gold); color: #fff;
+  padding: 4px 11px; border-radius: 99px;
+  font-weight: 700; font-size: 11.5px;
+  animation: chipGlow 2.5s infinite;
+}
+@keyframes chipGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, .35); }
+  50% { box-shadow: 0 0 0 6px rgba(201, 162, 39, 0); }
+}
 .stop-dot {
   position: absolute; left: 12px; top: 18px;
   width: 20px; height: 20px; border-radius: 50%;
@@ -442,5 +477,7 @@ body.locked { position: fixed; left: 0; right: 0; overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .sheet, .sheet-backdrop, .progress-fill, .btn, .stop-card, .now-card { transition: none; }
   .stop.now .stop-dot { animation: none; }
+  .stop.trail-active .steps-trail span, .walk-chip.walking { animation: none; }
+  .stop.trail-active .steps-trail span { opacity: .85; }
   .confetti { display: none; }
 }

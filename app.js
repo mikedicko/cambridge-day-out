@@ -217,7 +217,9 @@
       $('nowTime').textContent = `until ${nowId.end}`;
     } else if (nextStop) {
       nowCard.hidden = false;
-      $('nowLabel').textContent = 'UP NEXT';
+      const idx = STOPS.indexOf(nextStop);
+      const walking = idx > 0 && statuses[STOPS[idx - 1].id] === 'done';
+      $('nowLabel').textContent = walking ? '🚶 ON THE WAY TO' : 'UP NEXT';
       $('nowTitle').textContent = `${nextStop.emoji} ${nextStop.name}`;
       if (todayStr === TRIP.date) {
         const diff = toMins(nextStop.start) - (now.getHours() * 60 + now.getMinutes());
@@ -255,12 +257,21 @@
   function renderTimeline() {
     const statuses = computeStatus();
     renderHero(statuses);
+    // Walking detection: previous stop finished (by the clock, or either of you
+    // marked it done) and the next one hasn't started — you're between stops.
+    let walkingToIdx = -1;
+    STOPS.forEach((s, i) => {
+      if (i > 0 && statuses[s.id] === 'next' && statuses[STOPS[i - 1].id] === 'done') walkingToIdx = i;
+    });
+
     const ol = $('timeline');
     ol.innerHTML = '';
     STOPS.forEach((s, i) => {
       const li = document.createElement('li');
       const st = statuses[s.id];
-      li.className = `stop ${st}`;
+      const isWalkingTo = i === walkingToIdx;
+      const isWalkingFrom = i === walkingToIdx - 1;
+      li.className = `stop ${st}${isWalkingTo ? ' walking' : ''}${isWalkingFrom ? ' trail-active' : ''}`;
       const counts = mediaCountsFor(s.id);
       const pills = [];
       if (st === 'now') pills.push('<span class="pill pill-now">NOW</span>');
@@ -268,9 +279,16 @@
       if (st === 'done') pills.push('<span class="pill pill-done">✓ Done</span>');
       if (counts.ticket) pills.push(`<span class="pill pill-media">🎟 ${counts.ticket}</span>`);
       if (counts.photo) pills.push(`<span class="pill pill-media">📷 ${counts.photo}</span>`);
+      const chip = isWalkingTo
+        ? `<div class="walk-chip walking">🚶 On the way${s.walk ? ` — ${s.walk}` : '…'}</div>`
+        : (s.walk ? `<div class="walk-chip">🚶 ${s.walk}</div>` : '');
+      const trail = i < STOPS.length - 1
+        ? `<div class="steps-trail" aria-hidden="true">${'<span>👣</span>'.repeat(5)}</div>`
+        : '';
       li.innerHTML = `
-        ${s.walk ? `<div class="walk-chip">🚶 ${s.walk}</div>` : ''}
+        ${chip}
         <div class="stop-dot">${st === 'done' ? '✓' : i + 1}</div>
+        ${trail}
         <button class="stop-card" data-stop="${s.id}">
           <div class="stop-emoji">${s.emoji}</div>
           <div class="stop-info">
