@@ -89,6 +89,9 @@ a { color: inherit; }
 
 /* ── Views ── */
 main { max-width: 560px; margin: 0 auto; padding: 18px 16px calc(96px + var(--safe-bottom)); }
+/* Route & Memories have no hero above them, so they must clear the
+   status bar (time/battery) themselves on a notched phone */
+.view-map, .view-memories { padding-top: calc(env(safe-area-inset-top, 0px) + 12px); }
 .view-heading { font-family: var(--serif); font-size: 26px; margin-bottom: 4px; }
 .view-sub { font-size: 14px; color: var(--ink-soft); margin-bottom: 16px; }
 
