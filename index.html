@@ -68,7 +68,7 @@
 
     <section class="view view-memories" id="viewMemories" hidden>
       <h2 class="view-heading">Memories</h2>
-      <p class="view-sub">Photos from the day, stop by stop — shared live between both your phones.</p>
+      <p class="view-sub">Photos and thoughts from the day, stop by stop — shared live between both your phones.</p>
       <div id="memoriesGrid" class="memories-grid"></div>
       <div class="memories-empty" id="memoriesEmpty">
         <div class="memories-empty-icon">📷</div>
@@ -156,6 +156,32 @@
       <div class="modal-actions">
         <button class="btn btn-gold" id="arriveYes">Yes, we’re here!</button>
         <button class="btn btn-ghost" id="arriveNo">Not yet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- First-open name ask -->
+  <div class="modal-backdrop" id="nameModal" hidden>
+    <div class="modal">
+      <div class="arrive-emoji">👋</div>
+      <div class="arrive-text">Before we set off — what’s your name?</div>
+      <input type="text" class="caption-input name-input" id="nameInput" placeholder="Your name" maxlength="20" enterkeyhint="done" autocomplete="given-name">
+      <div class="modal-actions">
+        <button class="btn btn-gold" id="nameSave">Let’s go</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Review after finishing an activity -->
+  <div class="modal-backdrop" id="reviewModal" hidden>
+    <div class="modal">
+      <div class="arrive-emoji" id="reviewEmoji">💭</div>
+      <div class="arrive-text" id="reviewTitle">What did you think?</div>
+      <p class="modal-hint">One line for the scrapbook — it’ll appear in Memories.</p>
+      <textarea class="caption-input review-text" id="reviewInput" rows="3" maxlength="200" placeholder="It was magical…"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-gold" id="reviewSave">Save</button>
+        <button class="btn btn-ghost" id="reviewSkip">Skip</button>
       </div>
     </div>
   </div>

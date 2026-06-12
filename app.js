@@ -82,9 +82,11 @@
 
   /* ── Shared store (Firestore) ─────────────────────────────────── */
   let db = null, tripRef = null;
-  let allMedia = [];   // [{id, stopId, kind, type, name, data, caption, ts}]
-  let doneMap = {};    // stopId -> true
-  let arrivedMap = {}; // stopId -> true (either phone confirmed arrival)
+  let allMedia = [];    // [{id, stopId, kind, type, name, data, caption, by, ts}]
+  let allReviews = [];  // [{id, stopId, name, text, ts}]
+  let doneMap = {};     // stopId -> true
+  let arrivedMap = {};  // stopId -> true (either phone confirmed arrival)
+  let userName = LS.get('userName', '');
 
   function initFirebase() {
     try {
@@ -108,6 +110,11 @@
         renderTimeline();
         if (!$('sheet').hidden) updateDoneBtn();
       }, () => {});
+
+      tripRef.collection('reviews').orderBy('ts').onSnapshot((snap) => {
+        allReviews = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (!$('viewMemories').hidden) renderMemories();
+      }, () => {});
     } catch (e) {
       db = null; // itinerary, maps & tips still work without the backend
     }
@@ -118,7 +125,9 @@
 
   function saveShared(patch) {
     if (!tripRef) return;
-    tripRef.collection('state').doc('shared').set(patch, { merge: true }).catch(() => {});
+    // mergeFields (not merge:true) so map fields are REPLACED — otherwise
+    // deleting a key (un-marking done) never reaches the server.
+    tripRef.collection('state').doc('shared').set(patch, { mergeFields: Object.keys(patch) }).catch(() => {});
   }
 
   /* ── Image compression (keeps docs under Firestore's 1MB cap) ── */
@@ -170,7 +179,28 @@
         caption = c;
       }
     }
-    await tripRef.collection('media').add({ stopId, kind, type, name: file.name || '', data, caption, ts: Date.now() });
+    await tripRef.collection('media').add({ stopId, kind, type, name: file.name || '', data, caption, by: userName, ts: Date.now() });
+  }
+
+  /* Review modal — asked once per person per stop when marking it done */
+  function maybePromptReview(stopId) {
+    if (!tripRef || !userName) return;
+    if (allReviews.some((r) => r.stopId === stopId && r.name === userName)) return;
+    const s = stopById(stopId);
+    $('reviewEmoji').textContent = s.emoji;
+    $('reviewTitle').textContent = `What did you think of ${s.place || s.name}?`;
+    $('reviewInput').value = '';
+    $('reviewModal').hidden = false;
+    const close = () => {
+      $('reviewModal').hidden = true;
+      $('reviewSave').onclick = $('reviewSkip').onclick = null;
+    };
+    $('reviewSave').onclick = () => {
+      const text = $('reviewInput').value.trim();
+      if (text) tripRef.collection('reviews').add({ stopId, name: userName, text, ts: Date.now() }).catch(() => {});
+      close();
+    };
+    $('reviewSkip').onclick = close;
   }
 
   /* Photo note modal — resolves with the note text ('' for none) or null on cancel */
@@ -225,7 +255,8 @@
     const snooze = LS.get('arriveSnooze', {});
     const show = candidate
       && (!snooze[candidate.id] || Date.now() >= snooze[candidate.id])
-      && $('sheet').hidden; // don't interrupt reading a stop
+      && $('sheet').hidden // don't interrupt reading a stop
+      && $('nameModal').hidden && $('reviewModal').hidden;
     if (show) {
       arrivalAskId = candidate.id;
       $('arriveEmoji').textContent = candidate.emoji;
@@ -367,15 +398,29 @@
     const photos = getMedia({ kind: 'photo' });
     const grid = $('memoriesGrid');
     grid.innerHTML = '';
-    $('memoriesEmpty').hidden = photos.length > 0;
+    $('memoriesEmpty').hidden = photos.length > 0 || allReviews.length > 0;
     const byStop = {};
     photos.forEach((p) => { (byStop[p.stopId] = byStop[p.stopId] || []).push(p); });
+    const reviewsByStop = {};
+    allReviews.forEach((r) => { (reviewsByStop[r.stopId] = reviewsByStop[r.stopId] || []).push(r); });
     STOPS.forEach((s) => {
-      const items = byStop[s.id];
-      if (!items) return;
+      const items = byStop[s.id] || [];
+      const quotes = reviewsByStop[s.id] || [];
+      if (!items.length && !quotes.length) return;
       const group = document.createElement('div');
       group.className = 'mem-group';
-      group.innerHTML = `<div class="mem-group-title">${s.emoji} ${s.name}</div><div class="mem-group-photos"></div>`;
+      group.innerHTML = `<div class="mem-group-title">${s.emoji} ${s.name}</div><div class="mem-quotes"></div><div class="mem-group-photos"></div>`;
+      const quotesEl = group.querySelector('.mem-quotes');
+      quotes.forEach((r) => {
+        const q = document.createElement('div');
+        q.className = 'mem-quote';
+        q.textContent = `“${r.text}”`;
+        const by = document.createElement('span');
+        by.className = 'mem-quote-by';
+        by.textContent = `— ${r.name}`;
+        q.appendChild(by);
+        quotesEl.appendChild(q);
+      });
       const photosEl = group.querySelector('.mem-group-photos');
       items.forEach((m) => {
         const b = document.createElement('button');
@@ -540,7 +585,7 @@
       img.src = m.data;
       body.appendChild(img);
     }
-    $('viewerCaption').textContent = m.caption || '';
+    $('viewerCaption').textContent = m.caption ? `“${m.caption}”${m.by ? ` — ${m.by}` : ''}` : '';
     $('viewerCaption').hidden = !m.caption;
     if (!document.body.classList.contains('locked')) { lockBody(); viewerLocked = true; }
     $('viewer').hidden = false;
@@ -610,10 +655,18 @@
     closeViewer();
   });
   $('doneBtn').addEventListener('click', () => {
-    if (doneMap[currentStopId]) delete doneMap[currentStopId];
-    else doneMap[currentStopId] = true;
+    if (doneMap[currentStopId]) {
+      // Un-mark: also clear the arrival flag so the stop fully resets
+      delete doneMap[currentStopId];
+      delete arrivedMap[currentStopId];
+      saveShared({ done: doneMap, arrived: arrivedMap });
+    } else {
+      doneMap[currentStopId] = true;
+      saveShared({ done: doneMap });
+      maybePromptReview(currentStopId);
+    }
     updateDoneBtn();
-    saveShared({ done: doneMap });
+    renderTimeline();
   });
   $('ticketInput').addEventListener('change', async (e) => {
     for (const f of e.target.files) await addMedia(currentStopId, 'ticket', f);
@@ -625,6 +678,21 @@
     e.target.value = '';
     renderPhotoGrid();
   });
+
+  /* ── First-open name ask ── */
+  (function askName() {
+    if (userName) return;
+    $('nameModal').hidden = false;
+    const save = () => {
+      const val = $('nameInput').value.trim();
+      if (!val) { $('nameInput').focus(); return; }
+      userName = val;
+      LS.set('userName', userName);
+      $('nameModal').hidden = true;
+    };
+    $('nameSave').addEventListener('click', save);
+    $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+  })();
 
   /* ── Hero date ── */
   (function heroDate() {
