@@ -445,6 +445,56 @@ main { max-width: 560px; margin: 0 auto; padding: 18px 16px calc(96px + var(--sa
 .review-text { resize: none; font-family: inherit; }
 @media (prefers-reduced-motion: reduce) { .modal { animation: none; } }
 
+/* Add activity + skipped section */
+.add-activity {
+  display: flex; align-items: center; justify-content: center;
+  width: calc(100% - 52px); margin: 4px 0 6px 52px;
+  padding: 15px; border-radius: var(--radius);
+  border: 1.5px dashed rgba(34,48,42,.28);
+  color: var(--ink-soft); font-size: 14px; font-weight: 700;
+  transition: transform .12s ease;
+}
+.add-activity:active { transform: scale(.98); }
+.skipped-section { margin-top: 22px; }
+.skipped-heading {
+  font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 10px 52px; font-weight: 700;
+}
+.skipped-section .stop-card { margin: 0 0 10px 52px; width: calc(100% - 52px); opacity: .55; filter: grayscale(.35); }
+.skipped-section .pill-skipped { background: rgba(34,48,42,.1); color: var(--ink-soft); }
+
+/* Edit button over the sheet photo (mirrors the close button) */
+.sheet-edit {
+  position: absolute; top: 10px; left: 10px;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(20,30,25,.40); color: #fff; font-size: 16px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Custom activities have no photo — compact header strip instead */
+.sheet-photo.no-photo { height: 64px; background: linear-gradient(160deg, var(--green), var(--green-deep)); }
+.sheet-photo.no-photo img,
+.sheet-photo.no-photo .sheet-photo-scrim,
+.sheet-photo.no-photo .sheet-photo-credit { display: none; }
+
+.btn-skip { margin-top: 10px; color: var(--ink-soft); }
+
+/* Activity form */
+.activity-modal { text-align: left; }
+.activity-modal .arrive-text { text-align: center; margin-bottom: 14px; }
+.field-row { margin-bottom: 11px; }
+.field-row.two { display: flex; gap: 10px; }
+.field-row.two .field { flex: 1; }
+.field {
+  display: block; font-size: 11.5px; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft);
+}
+.field .caption-input { margin-top: 5px; display: block; width: 100%; }
+.emoji-field { flex: 0 0 76px !important; }
+.emoji-field input { text-align: center; font-size: 19px; }
+
 /* Welcome modal */
 .welcome-rows { margin-top: 14px; }
 .welcome-row {
@@ -523,6 +573,8 @@ body.locked { position: fixed; left: 0; right: 0; overflow: hidden; }
   .stop-chevron { color: #4a564e; }
   .ticket-thumb { border-color: rgba(232,228,216,.25); }
   .caption-input:focus { outline-color: #8a7420; }
+  .add-activity { border-color: rgba(232,228,216,.28); }
+  .skipped-section .pill-skipped { background: rgba(232,228,216,.12); }
 }
 
 /* ── Reduced motion ── */

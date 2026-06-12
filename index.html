@@ -54,6 +54,11 @@
   <main>
     <section class="view view-today" id="viewToday">
       <ol class="timeline" id="timeline"></ol>
+      <button class="add-activity" id="addActivityBtn">＋ Add activity</button>
+      <div class="skipped-section" id="skippedSection" hidden>
+        <h3 class="skipped-heading">Skipped</h3>
+        <div id="skippedList"></div>
+      </div>
     </section>
 
     <section class="view view-map" id="viewMap" hidden>
@@ -91,6 +96,7 @@
         <img id="sheetPhotoImg" alt="" loading="lazy">
         <div class="sheet-photo-scrim"></div>
         <div class="sheet-handle"></div>
+        <button class="sheet-edit" id="sheetEdit" aria-label="Edit activity">✎</button>
         <button class="sheet-close" id="sheetClose" aria-label="Close">✕</button>
         <span class="sheet-photo-credit" id="sheetPhotoCredit"></span>
       </div>
@@ -109,7 +115,7 @@
         <ul class="tips-list" id="tipsList"></ul>
       </div>
 
-      <div class="sheet-section">
+      <div class="sheet-section" id="mapSection">
         <h3>📍 Getting there</h3>
         <div class="map-frame-wrap small"><iframe id="stopMap" title="Stop map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe></div>
         <div class="btn-row">
@@ -136,6 +142,7 @@
       </div>
 
       <button class="btn btn-done btn-block" id="doneBtn"></button>
+      <button class="btn btn-ghost btn-block btn-skip" id="skipBtn"></button>
       <div class="sheet-bottom-space"></div>
     </div>
   </div>
@@ -168,6 +175,38 @@
       <input type="text" class="caption-input name-input" id="nameInput" placeholder="Your name" maxlength="20" enterkeyhint="done" autocomplete="given-name">
       <div class="modal-actions">
         <button class="btn btn-gold" id="nameSave">Let’s go</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / edit activity -->
+  <div class="modal-backdrop" id="activityModal" hidden>
+    <div class="modal activity-modal">
+      <div class="arrive-text" id="activityModalTitle">Add an activity</div>
+      <div class="field-row two" id="rowEmojiTitle">
+        <label class="field emoji-field">Emoji
+          <input type="text" class="caption-input" id="activityEmoji" maxlength="4" placeholder="✨">
+        </label>
+        <label class="field">Title
+          <input type="text" class="caption-input" id="activityName" maxlength="60" placeholder="Coffee at…">
+        </label>
+      </div>
+      <div class="field-row two">
+        <label class="field">Starts
+          <input type="time" class="caption-input" id="activityStart">
+        </label>
+        <label class="field">Ends
+          <input type="time" class="caption-input" id="activityEnd">
+        </label>
+      </div>
+      <div class="field-row" id="rowDesc">
+        <label class="field">Description
+          <textarea class="caption-input review-text" id="activityDesc" rows="2" maxlength="300" placeholder="What’s the plan?"></textarea>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-gold" id="activitySave">Save</button>
+        <button class="btn btn-ghost" id="activityCancel">Cancel</button>
       </div>
     </div>
   </div>

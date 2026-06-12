@@ -53,8 +53,14 @@
   /* ── Small helpers ── */
   const toMins = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
   const fmtRange = (s) => `${s.start} – ${s.end}`;
-  const stopById = (id) => STOPS.find((s) => s.id === id);
-  const prevStop = (id) => { const i = STOPS.findIndex((s) => s.id === id); return i > 0 ? STOPS[i - 1] : null; };
+  const stopById = (id) => effectiveStops().all.find((s) => s.id === id);
+  // previous active stop that has a location (origin for walking directions)
+  const prevStopWithMap = (id) => {
+    const { actives } = effectiveStops();
+    const i = actives.findIndex((s) => s.id === id);
+    for (let j = i - 1; j >= 0; j--) if (actives[j].mapQuery) return actives[j];
+    return null;
+  };
 
   // Direct keyless embed endpoints (what maps.google.com?output=embed 301s to —
   // the redirect hop carries X-Frame-Options, the final document doesn't).
@@ -65,8 +71,7 @@
   };
   const mapsDirections = (from, to) =>
     `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=walking`;
-  const mapsFullRoute = () => {
-    const pts = STOPS.map((s) => s.mapQuery);
+  const mapsFullRoute = (pts) => {
     const waypoints = pts.slice(1, -1).join('|');
     return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pts[0])}&destination=${encodeURIComponent(pts[pts.length - 1])}&waypoints=${encodeURIComponent(waypoints)}&travelmode=walking`;
   };
@@ -84,9 +89,26 @@
   let db = null, tripRef = null;
   let allMedia = [];    // [{id, stopId, kind, type, name, data, caption, by, ts}]
   let allReviews = [];  // [{id, stopId, name, text, ts}]
+  let customStops = []; // user-added activities (shared)
   let doneMap = {};     // stopId -> true
   let arrivedMap = {};  // stopId -> true (either phone confirmed arrival)
+  let skippedMap = {};  // stopId -> true (shared)
+  let overridesMap = {}; // stopId -> {start, end} time overrides for built-ins
   let userName = LS.get('userName', '');
+
+  /* Built-ins with time overrides applied + custom activities, split into
+     the active (chronological) plan and the skipped pile. */
+  function effectiveStops() {
+    const base = STOPS.map((s) => {
+      const o = overridesMap[s.id];
+      return o ? { ...s, start: o.start || s.start, end: o.end || s.end } : s;
+    });
+    const all = base.concat(customStops.map((c) => ({ ...c, custom: true })));
+    const actives = all.filter((s) => !skippedMap[s.id])
+      .sort((a, b) => toMins(a.start) - toMins(b.start) || toMins(a.end) - toMins(b.end));
+    const skipped = all.filter((s) => skippedMap[s.id]);
+    return { actives, skipped, all };
+  }
 
   function initFirebase() {
     try {
@@ -107,8 +129,18 @@
         const d = snap.data() || {};
         doneMap = d.done || {};
         arrivedMap = d.arrived || {};
+        skippedMap = d.skipped || {};
+        overridesMap = d.overrides || {};
         renderTimeline();
-        if (!$('sheet').hidden) updateDoneBtn();
+        renderRoute();
+        if (!$('sheet').hidden) refreshSheetState();
+      }, () => {});
+
+      tripRef.collection('custom').orderBy('ts').onSnapshot((snap) => {
+        customStops = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        renderTimeline();
+        renderRoute();
+        if (!$('viewMemories').hidden) renderMemories();
       }, () => {});
 
       tripRef.collection('reviews').orderBy('ts').onSnapshot((snap) => {
@@ -223,7 +255,7 @@
   }
 
   /* ── Status engine ── */
-  function computeStatus() {
+  function computeStatus(activesArg) {
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const isTripDay = todayStr === TRIP.date;
@@ -232,7 +264,7 @@
 
     const statuses = {};
     let nextAssigned = false;
-    STOPS.forEach((s) => {
+    activesArg.forEach((s) => {
       if (doneMap[s.id]) { statuses[s.id] = 'done'; return; }
       if (afterTripDay) { statuses[s.id] = 'done'; return; }
       // Confirmed arrival pins the stop to 'now' (even if you got there early)
@@ -249,14 +281,15 @@
      When a stop's start time passes and nobody has confirmed arrival,
      ask. "Not yet" snoozes the question for 10 minutes (per device). */
   let arrivalAskId = null;
-  function checkArrival(statuses) {
+  function checkArrival(statuses, actives) {
     const banner = $('arriveBanner');
-    const candidate = STOPS.find((s) => statuses[s.id] === 'now' && !arrivedMap[s.id]);
+    const candidate = actives.find((s) => statuses[s.id] === 'now' && !arrivedMap[s.id]);
     const snooze = LS.get('arriveSnooze', {});
     const show = candidate
       && (!snooze[candidate.id] || Date.now() >= snooze[candidate.id])
       && $('sheet').hidden // don't interrupt reading a stop
-      && $('nameModal').hidden && $('reviewModal').hidden && $('welcomeModal').hidden;
+      && $('nameModal').hidden && $('reviewModal').hidden
+      && $('welcomeModal').hidden && $('activityModal').hidden;
     if (show) {
       arrivalAskId = candidate.id;
       $('arriveEmoji').textContent = candidate.emoji;
@@ -270,10 +303,10 @@
 
   /* ── Hero / now card ── */
   let heroStopId = null;
-  function renderHero(statuses) {
+  function renderHero(statuses, actives) {
     const nowCard = $('nowCard');
-    const nowId = STOPS.find((s) => statuses[s.id] === 'now');
-    const nextStop = STOPS.find((s) => statuses[s.id] === 'next');
+    const nowId = actives.find((s) => statuses[s.id] === 'now');
+    const nextStop = actives.find((s) => statuses[s.id] === 'next');
     heroStopId = (nowId || nextStop || {}).id || null;
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -285,8 +318,8 @@
       $('nowTime').textContent = nowId.nowLine ? `${nowId.nowLine} · until ${nowId.end}` : `until ${nowId.end}`;
     } else if (nextStop) {
       nowCard.hidden = false;
-      const idx = STOPS.indexOf(nextStop);
-      const walking = idx > 0 && statuses[STOPS[idx - 1].id] === 'done';
+      const idx = actives.indexOf(nextStop);
+      const walking = idx > 0 && statuses[actives[idx - 1].id] === 'done';
       $('nowLabel').textContent = walking ? '🚶 ON THE WAY TO' : 'UP NEXT';
       $('nowTitle').textContent = `${nextStop.emoji} ${nextStop.name}`;
       if (walking) {
@@ -309,11 +342,11 @@
       $('nowTime').textContent = 'Check the Memories tab';
     }
 
-    const doneCount = STOPS.filter((s) => statuses[s.id] === 'done').length;
-    $('progressFill').style.width = `${(doneCount / STOPS.length) * 100}%`;
-    $('progressText').textContent = `${doneCount}/${STOPS.length} stops`;
+    const doneCount = actives.filter((s) => statuses[s.id] === 'done').length;
+    $('progressFill').style.width = `${(doneCount / Math.max(actives.length, 1)) * 100}%`;
+    $('progressText').textContent = `${doneCount}/${actives.length} stops`;
 
-    if (doneCount === STOPS.length && !confettiFired) {
+    if (doneCount === actives.length && actives.length > 0 && !confettiFired) {
       confettiFired = true; LS.set('confettiFired', true);
       confetti();
     }
@@ -327,19 +360,20 @@
   }
 
   function renderTimeline() {
-    const statuses = computeStatus();
-    renderHero(statuses);
-    checkArrival(statuses);
+    const { actives, skipped } = effectiveStops();
+    const statuses = computeStatus(actives);
+    renderHero(statuses, actives);
+    checkArrival(statuses, actives);
     // Walking detection: previous stop finished (by the clock, or either of you
     // marked it done) and the next one hasn't started — you're between stops.
     let walkingToIdx = -1;
-    STOPS.forEach((s, i) => {
-      if (i > 0 && statuses[s.id] === 'next' && statuses[STOPS[i - 1].id] === 'done') walkingToIdx = i;
+    actives.forEach((s, i) => {
+      if (i > 0 && statuses[s.id] === 'next' && statuses[actives[i - 1].id] === 'done') walkingToIdx = i;
     });
 
     const ol = $('timeline');
     ol.innerHTML = '';
-    STOPS.forEach((s, i) => {
+    actives.forEach((s, i) => {
       const li = document.createElement('li');
       const st = statuses[s.id];
       const isWalkingTo = i === walkingToIdx;
@@ -357,7 +391,7 @@
       const chip = isWalkingTo
         ? `<div class="walk-chip walking">🚶 On the way${s.walk ? ` — ${s.walk}` : '…'}</div>`
         : (s.walk ? `<div class="walk-chip">🚶 ${s.walk}</div>` : '');
-      const trail = i < STOPS.length - 1
+      const trail = i < actives.length - 1
         ? `<div class="steps-trail" aria-hidden="true">${'<span>👣</span>'.repeat(5)}</div>`
         : '';
       li.innerHTML = `
@@ -368,27 +402,55 @@
           <div class="stop-emoji">${s.emoji}</div>
           <div class="stop-info">
             <div class="stop-time">${fmtRange(s)}</div>
-            <div class="stop-name">${s.name}</div>
+            <div class="stop-name"></div>
             ${pills.length ? `<div class="stop-meta">${pills.join('')}</div>` : ''}
           </div>
           <div class="stop-chevron">›</div>
         </button>`;
+      li.querySelector('.stop-name').textContent = s.name; // user text — keep it inert
       ol.appendChild(li);
     });
     ol.querySelectorAll('.stop-card').forEach((btn) =>
       btn.addEventListener('click', () => openSheet(btn.dataset.stop))
     );
+
+    // Skipped pile — greyed out below the add button, still tappable
+    const skSection = $('skippedSection');
+    const skList = $('skippedList');
+    skList.innerHTML = '';
+    skSection.hidden = skipped.length === 0;
+    skipped.forEach((s) => {
+      const b = document.createElement('button');
+      b.className = 'stop-card';
+      b.innerHTML = `
+        <div class="stop-emoji">${s.emoji}</div>
+        <div class="stop-info">
+          <div class="stop-time">${fmtRange(s)}</div>
+          <div class="stop-name"></div>
+          <div class="stop-meta"><span class="pill pill-skipped">⏭ Skipped</span></div>
+        </div>
+        <div class="stop-chevron">›</div>`;
+      b.querySelector('.stop-name').textContent = s.name;
+      b.addEventListener('click', () => openSheet(s.id));
+      skList.appendChild(b);
+    });
   }
 
   /* ── Route view ── */
   function renderRoute() {
-    $('routeMap').src = mapsRouteEmbed(STOPS.map((s) => s.mapQuery));
-    $('openRouteBtn').href = mapsFullRoute();
+    const { actives } = effectiveStops();
+    const pts = actives.filter((s) => s.mapQuery).map((s) => s.mapQuery);
+    if (pts.length >= 2) {
+      const src = mapsRouteEmbed(pts);
+      if ($('routeMap').src !== src) $('routeMap').src = src; // avoid pointless iframe reloads
+      $('openRouteBtn').href = mapsFullRoute(pts);
+    }
     const ol = $('routeList');
     ol.innerHTML = '';
-    STOPS.forEach((s, i) => {
+    actives.forEach((s, i) => {
       const li = document.createElement('li');
-      li.innerHTML = `<span class="route-num">${i + 1}</span> <span>${s.emoji} ${s.name}</span> <span class="route-time">${s.start}</span>`;
+      li.innerHTML = `<span class="route-num">${i + 1}</span> <span class="route-name"></span> <span class="route-time">${s.start}</span>`;
+      li.querySelector('.route-name').textContent = `${s.emoji} ${s.name}`;
       ol.appendChild(li);
     });
   }
@@ -403,7 +465,8 @@
     photos.forEach((p) => { (byStop[p.stopId] = byStop[p.stopId] || []).push(p); });
     const reviewsByStop = {};
     allReviews.forEach((r) => { (reviewsByStop[r.stopId] = reviewsByStop[r.stopId] || []).push(r); });
-    STOPS.forEach((s) => {
+    const ordered = effectiveStops().all.sort((a, b) => toMins(a.start) - toMins(b.start));
+    ordered.forEach((s) => {
       const items = byStop[s.id] || [];
       const quotes = reviewsByStop[s.id] || [];
       if (!items.length && !quotes.length) return;
@@ -454,30 +517,46 @@
   function openSheet(stopId) {
     currentStopId = stopId;
     const s = stopById(stopId);
-    $('sheetPhotoImg').src = `images/${s.id}.jpg`;
-    $('sheetPhotoImg').alt = s.name;
-    $('sheetPhotoCredit').textContent = (typeof IMAGE_CREDITS !== 'undefined' && IMAGE_CREDITS[s.id]) ? `📷 ${IMAGE_CREDITS[s.id]}` : '';
-    $('sheetEmoji').textContent = s.emoji;
+    if (!s) return;
+    $('sheetPhoto').classList.toggle('no-photo', !!s.custom);
+    if (s.custom) {
+      $('sheetPhotoImg').removeAttribute('src');
+      $('sheetPhotoCredit').textContent = '';
+    } else {
+      $('sheetPhotoImg').src = `images/${s.id}.jpg`;
+      $('sheetPhotoImg').alt = s.name;
+      $('sheetPhotoCredit').textContent = (typeof IMAGE_CREDITS !== 'undefined' && IMAGE_CREDITS[s.id]) ? `📷 ${IMAGE_CREDITS[s.id]}` : '';
+    }
+    $('sheetEmoji').textContent = s.emoji || '✨';
     $('sheetTitle').textContent = s.name;
     $('sheetTime').textContent = fmtRange(s);
 
     const badges = [];
     if (s.booked) badges.push(`<span class="pill pill-booked">🎟 ${s.bookedLabel || 'Booked'}</span>`);
     if (s.walk) badges.push(`<span class="pill pill-media">🚶 ${s.walk}</span>`);
+    if (skippedMap[s.id]) badges.push('<span class="pill pill-skipped">⏭ Skipped</span>');
     $('sheetBadges').innerHTML = badges.join('');
 
-    $('sheetDesc').textContent = s.desc;
-    $('tipsList').innerHTML = s.tips.map((t) => `<li>${t}</li>`).join('');
+    $('sheetDesc').textContent = s.desc || '';
+    $('sheetDesc').hidden = !s.desc;
+    const tips = s.tips || [];
+    $('tipsSection').hidden = tips.length === 0;
+    $('tipsList').innerHTML = tips.map((t) => `<li>${t}</li>`).join('');
 
-    $('stopMap').src = mapsEmbed(s.mapQuery);
-    const prev = prevStop(stopId);
-    $('directionsBtn').href = prev ? mapsDirections(prev.mapQuery, s.mapQuery)
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.mapQuery)}`;
+    $('mapSection').hidden = !s.mapQuery;
+    if (s.mapQuery) {
+      $('stopMap').src = mapsEmbed(s.mapQuery);
+      const prev = prevStopWithMap(stopId);
+      $('directionsBtn').href = prev ? mapsDirections(prev.mapQuery, s.mapQuery)
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.mapQuery)}`;
+    } else {
+      $('stopMap').src = 'about:blank';
+    }
     $('websiteBtn').hidden = !s.website;
     if (s.website) $('websiteBtn').href = s.website;
 
     $('ticketsSection').hidden = !s.hasTickets;
-    updateDoneBtn();
+    refreshSheetState();
     renderTicketGrid();
     renderPhotoGrid();
 
@@ -534,6 +613,15 @@
     const btn = $('doneBtn');
     btn.textContent = isDone ? '↩︎ Mark as not done' : '✓ Mark as done';
     btn.classList.toggle('undone', isDone);
+  }
+  /* Keep the sheet's buttons/badges in step with shared state */
+  function refreshSheetState() {
+    const isSkipped = !!skippedMap[currentStopId];
+    $('doneBtn').hidden = isSkipped;
+    $('skipBtn').textContent = isSkipped ? '↩︎ Put it back in the plan' : '⏭ Skip this activity';
+    updateDoneBtn();
+    const s = stopById(currentStopId);
+    if (s) $('sheetTime').textContent = fmtRange(s);
   }
 
   function renderTicketGrid() {
@@ -628,9 +716,10 @@
   $('arriveYes').addEventListener('click', () => {
     if (!arrivalAskId) return;
     arrivedMap[arrivalAskId] = true;
-    // Arriving somewhere means every earlier stop is behind you
-    const idx = STOPS.findIndex((s) => s.id === arrivalAskId);
-    STOPS.slice(0, idx).forEach((s) => { doneMap[s.id] = true; });
+    // Arriving somewhere means every earlier active stop is behind you
+    const { actives } = effectiveStops();
+    const idx = actives.findIndex((s) => s.id === arrivalAskId);
+    actives.slice(0, Math.max(idx, 0)).forEach((s) => { doneMap[s.id] = true; });
     saveShared({ arrived: arrivedMap, done: doneMap });
     $('arriveBanner').hidden = true;
     arrivalAskId = null;
@@ -646,6 +735,68 @@
   });
   $('nowCard').addEventListener('click', () => { if (heroStopId) openSheet(heroStopId); });
   $('sheetClose').addEventListener('click', closeSheet);
+
+  /* ── Skip / reactivate ── */
+  $('skipBtn').addEventListener('click', () => {
+    if (skippedMap[currentStopId]) delete skippedMap[currentStopId];
+    else {
+      skippedMap[currentStopId] = true;
+      delete arrivedMap[currentStopId];
+    }
+    saveShared({ skipped: skippedMap, arrived: arrivedMap });
+    closeSheet(); // it visibly moves to/from the skipped pile
+  });
+
+  /* ── Add / edit activity ── */
+  let editingStopId = null; // null = adding new
+  function openActivityModal(stop) {
+    editingStopId = stop ? stop.id : null;
+    const isCustom = stop ? !!stop.custom : true;
+    $('activityModalTitle').textContent = stop
+      ? (isCustom ? 'Edit activity' : `Change times — ${stop.place || stop.name}`)
+      : 'Add an activity';
+    $('rowEmojiTitle').hidden = !isCustom;
+    $('rowDesc').hidden = !isCustom;
+    $('activityEmoji').value = stop && isCustom ? (stop.emoji || '') : '';
+    $('activityName').value = stop && isCustom ? stop.name : '';
+    $('activityDesc').value = stop && isCustom ? (stop.desc || '') : '';
+    $('activityStart').value = stop ? stop.start : '';
+    $('activityEnd').value = stop ? stop.end : '';
+    $('activityModal').hidden = false;
+  }
+  $('addActivityBtn').addEventListener('click', () => openActivityModal(null));
+  $('sheetEdit').addEventListener('click', () => {
+    const s = stopById(currentStopId);
+    if (s) openActivityModal(s);
+  });
+  $('activityCancel').addEventListener('click', () => { $('activityModal').hidden = true; });
+  $('activitySave').addEventListener('click', async () => {
+    const start = $('activityStart').value, end = $('activityEnd').value;
+    if (!start || !end) { alert('Pick a start and end time.'); return; }
+    if (toMins(end) <= toMins(start)) { alert('The end time needs to be after the start.'); return; }
+    const editing = editingStopId ? stopById(editingStopId) : null;
+    if (editing && !editing.custom) {
+      // built-in: only times change, stored as an override
+      overridesMap[editing.id] = { start, end };
+      saveShared({ overrides: overridesMap });
+    } else {
+      const name = $('activityName').value.trim();
+      if (!name) { alert('Give it a title.'); return; }
+      const payload = {
+        name,
+        emoji: $('activityEmoji').value.trim() || '✨',
+        desc: $('activityDesc').value.trim(),
+        start, end,
+      };
+      if (!tripRef) { alert('No connection yet — try again in a moment.'); return; }
+      if (editing) await tripRef.collection('custom').doc(editing.id).set(payload, { merge: true });
+      else await tripRef.collection('custom').add({ ...payload, ts: Date.now() });
+    }
+    $('activityModal').hidden = true;
+    renderTimeline();
+    renderRoute();
+    if (!$('sheet').hidden) refreshSheetState();
+  });
   $('sheetBackdrop').addEventListener('click', closeSheet);
   $('viewerClose').addEventListener('click', closeViewer);
   $('viewerDelete').addEventListener('click', async () => {
