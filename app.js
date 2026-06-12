@@ -256,7 +256,7 @@
     const show = candidate
       && (!snooze[candidate.id] || Date.now() >= snooze[candidate.id])
       && $('sheet').hidden // don't interrupt reading a stop
-      && $('nameModal').hidden && $('reviewModal').hidden;
+      && $('nameModal').hidden && $('reviewModal').hidden && $('welcomeModal').hidden;
     if (show) {
       arrivalAskId = candidate.id;
       $('arriveEmoji').textContent = candidate.emoji;
@@ -679,9 +679,30 @@
     renderPhotoGrid();
   });
 
+  /* ── Hero kicker: greeting once we know the name, date until then ── */
+  function updateKicker() {
+    if (userName) {
+      $('heroKicker').textContent = `Hi, ${userName} 👋`;
+    } else {
+      const d = new Date(TRIP.date + 'T12:00:00');
+      $('heroKicker').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    }
+  }
+
+  /* ── One-time welcome card ── */
+  function maybeShowWelcome() {
+    if (!userName || LS.get('welcomeSeen', false)) return;
+    $('welcomeTitle').textContent = `Welcome to your day out, ${userName}`;
+    $('welcomeModal').hidden = false;
+  }
+  $('welcomeClose').addEventListener('click', () => {
+    LS.set('welcomeSeen', true);
+    $('welcomeModal').hidden = true;
+  });
+
   /* ── First-open name ask ── */
   (function askName() {
-    if (userName) return;
+    if (userName) { maybeShowWelcome(); return; }
     $('nameModal').hidden = false;
     const save = () => {
       const val = $('nameInput').value.trim();
@@ -689,16 +710,14 @@
       userName = val;
       LS.set('userName', userName);
       $('nameModal').hidden = true;
+      updateKicker();
+      maybeShowWelcome();
     };
     $('nameSave').addEventListener('click', save);
     $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
   })();
 
-  /* ── Hero date ── */
-  (function heroDate() {
-    const d = new Date(TRIP.date + 'T12:00:00');
-    $('heroKicker').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-  })();
+  updateKicker();
 
   /* ── Boot ── */
   initFirebase();
